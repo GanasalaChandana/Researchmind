@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { streamResearch } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
@@ -9,11 +9,9 @@ import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import ResearchProgress, { Phase } from "@/components/ResearchProgress";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 type Tab = "agents" | "graph" | "report";
 
-// Map agent names to phases
 function agentToPhase(agent: string): Phase | null {
   if (agent === "orchestrator") return "orchestrating";
   if (agent === "search_agent") return "searching";
@@ -36,49 +34,77 @@ export default function ResearchSessionPage() {
   const [tab, setTab] = useState<Tab>("agents");
   const [phase, setPhase] = useState<Phase>("orchestrating");
   const [copied, setCopied] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const completedRef = useRef(false);
 
   useEffect(() => {
-    if (!sessionId || !topic) return;
+    if (!sessionId) return;
 
-    const es = streamResearch(sessionId, topic, depth);
-
-    es.onmessage = (e) => {
-      try {
-        const event: AgentEvent = JSON.parse(e.data);
-        setEvents((prev) => [...prev, event]);
-
-        // Update phase based on which agent is speaking
-        const newPhase = agentToPhase(event.agent);
-        if (newPhase) setPhase(newPhase);
-
-        if (event.type === "done" && event.data?.report) {
-          completedRef.current = true;
-          setReport(event.data.report as unknown as ResearchReport);
-          setStatus("completed");
+    // Step 1: Check if session already has a saved report
+    fetch(`/api/research/${sessionId}/report`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.report) {
+          // Session already completed — load from DB, no streaming needed
+          setReport(data.report as ResearchReport);
+          setStatus(data.status ?? "completed");
           setPhase("done");
+          completedRef.current = true;
           setTab("report");
-          es.close();
-        }
-
-        if (event.type === "error") {
+          setInitializing(false);
+        } else if (data?.status === "failed") {
           setStatus("failed");
           setPhase("done");
-          es.close();
+          setInitializing(false);
+        } else {
+          // Session is still running — start SSE stream
+          setInitializing(false);
+          startStream();
         }
-      } catch {}
-    };
+      })
+      .catch(() => {
+        setInitializing(false);
+        startStream();
+      });
 
-    es.onerror = () => {
-      if (!completedRef.current) {
-        setStatus((prev) => (prev === "running" ? "failed" : prev));
-        setPhase("done");
-      }
-      es.close();
-    };
+    function startStream() {
+      if (!topic) return;
+      const es = streamResearch(sessionId, topic, depth);
 
-    return () => es.close();
-  }, [sessionId, topic, depth]);
+      es.onmessage = (e) => {
+        try {
+          const event: AgentEvent = JSON.parse(e.data);
+          setEvents((prev) => [...prev, event]);
+
+          const newPhase = agentToPhase(event.agent);
+          if (newPhase) setPhase(newPhase);
+
+          if (event.type === "done" && event.data?.report) {
+            completedRef.current = true;
+            setReport(event.data.report as unknown as ResearchReport);
+            setStatus("completed");
+            setPhase("done");
+            setTab("report");
+            es.close();
+          }
+
+          if (event.type === "error") {
+            setStatus("failed");
+            setPhase("done");
+            es.close();
+          }
+        } catch {}
+      };
+
+      es.onerror = () => {
+        if (!completedRef.current) {
+          setStatus((prev) => (prev === "running" ? "failed" : prev));
+          setPhase("done");
+        }
+        es.close();
+      };
+    }
+  }, [sessionId]);
 
   async function handleShare() {
     const url = `${window.location.origin}/research/${sessionId}?topic=${encodeURIComponent(topic)}&depth=${depth}`;
@@ -92,8 +118,20 @@ export default function ResearchSessionPage() {
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "agents", label: "Agent Activity", icon: <Brain className="w-4 h-4" /> },
     { id: "graph",  label: "Knowledge Graph", icon: <Network className="w-4 h-4" /> },
-    { id: "report", label: "Report",          icon: <FileText className="w-4 h-4" /> },
+    { id: "report", label: "Report",           icon: <FileText className="w-4 h-4" /> },
   ];
+
+  // Show loading spinner while checking DB
+  if (initializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+          <p className="text-sm text-slate-400">Loading research...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-4 sm:p-6 max-w-5xl mx-auto">
@@ -109,17 +147,22 @@ export default function ResearchSessionPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              {status === "running"    && <Loader2 className="w-4 h-4 text-brand-500 animate-spin" />}
-              {status === "completed"  && <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />}
-              {status === "failed"     && <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />}
+              {status === "running"   && <Loader2 className="w-4 h-4 text-brand-500 animate-spin" />}
+              {status === "completed" && <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />}
+              {status === "failed"    && <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />}
               <span className="text-sm text-slate-400 capitalize">{status}</span>
-              <span className="text-slate-600">·</span>
-              <span className="text-sm text-slate-500">{events.length} events</span>
+              {events.length > 0 && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-sm text-slate-500">{events.length} events</span>
+                </>
+              )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white">{topic}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white">
+              {topic || report?.topic || "Research Session"}
+            </h1>
           </div>
 
-          {/* Share button */}
           <button
             onClick={handleShare}
             className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-slate-300 hover:text-white transition-colors shrink-0"
@@ -141,7 +184,7 @@ export default function ResearchSessionPage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
               tab === t.id
                 ? "bg-brand-500 text-white"
                 : "text-slate-400 hover:text-slate-200"
@@ -162,7 +205,22 @@ export default function ResearchSessionPage() {
       </div>
 
       {/* Content */}
-      {tab === "agents" && <AgentActivityFeed events={events} />}
+      {tab === "agents" && (
+        status === "completed" && events.length === 0
+          ? (
+            <div className="glass rounded-xl p-8 text-center">
+              <p className="text-slate-300 font-medium mb-1">Report loaded from history</p>
+              <p className="text-slate-500 text-sm">This research was completed in a previous session.</p>
+              <button
+                onClick={() => setTab("report")}
+                className="mt-4 flex items-center gap-2 mx-auto px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm rounded-lg transition-colors"
+              >
+                <FileText className="w-4 h-4" /> View Report
+              </button>
+            </div>
+          )
+          : <AgentActivityFeed events={events} />
+      )}
 
       {tab === "graph" && (
         <div className="glass rounded-xl p-6">
