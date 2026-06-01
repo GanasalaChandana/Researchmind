@@ -2,7 +2,7 @@
 
 > Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + PDF export.
 
-🔗 **Live Demo:** [researchmind-beta.vercel.app](https://researchmind-beta.vercel.app)
+🔗 **Live Demo:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)
 
 ---
 
