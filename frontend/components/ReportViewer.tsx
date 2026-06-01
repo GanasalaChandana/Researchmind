@@ -1,11 +1,39 @@
 "use client";
+import { useState } from "react";
 import { ResearchReport } from "@/lib/types";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Download, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { exportToPdf } from "@/lib/exportPdf";
 
 export default function ReportViewer({ report }: { report: ResearchReport }) {
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportToPdf(report);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {/* Header row with export button */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-white">{report.topic}</h1>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+        >
+          {exporting
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting...</>
+            : <><Download className="w-4 h-4" /> Export PDF</>
+          }
+        </button>
+      </div>
+
       {/* Summary */}
       <div className="glass rounded-xl p-6 border-l-4 border-brand-500">
         <h2 className="text-lg font-semibold text-white mb-2">Executive Summary</h2>
@@ -24,7 +52,7 @@ export default function ReportViewer({ report }: { report: ResearchReport }) {
           >
             <h3 className="text-base font-semibold text-white mb-3">{section.heading}</h3>
             <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">{section.content}</p>
-            {section.citations.length > 0 && (
+            {section.citations?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {section.citations.map((c) => (
                   <a
