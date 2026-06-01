@@ -23,7 +23,7 @@ export default function AgentActivityFeed({ events }: { events: AgentEvent[] }) 
   const errorEvent = events.find(e => e.type === "error");
 
   return (
-    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+    <div className="space-y-2">
       {errorEvent && (
         <div className="glass rounded-xl p-4 border border-red-500/30 bg-red-500/5 mb-2">
           <p className="text-sm text-red-300 font-medium">{errorEvent.message}</p>

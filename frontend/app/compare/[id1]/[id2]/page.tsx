@@ -86,7 +86,7 @@ function Panel({
 
       {/* Report */}
       {report ? (
-        <div className="flex-1 space-y-3 overflow-y-auto max-h-[500px] pr-1">
+        <div className="flex-1 space-y-3">
           <div className="bg-white/5 rounded-xl p-4">
             <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Summary</p>
             <p className="text-sm text-slate-300 leading-relaxed">{report.summary}</p>
@@ -99,7 +99,7 @@ function Panel({
           ))}
         </div>
       ) : (
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[500px]">
+        <div className="flex-1 flex flex-col gap-2">
           {events.slice(-8).map((ev, i) => (
             <div key={i} className="flex items-start gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-brand-500/60 mt-1.5 shrink-0" />
