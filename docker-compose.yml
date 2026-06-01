@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: researchmind
+      POSTGRES_PASSWORD: researchmind
+      POSTGRES_DB: researchmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
