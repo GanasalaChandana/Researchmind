@@ -19,12 +19,19 @@ app = FastAPI(title="ResearchMind API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # In-memory session store (swap for Redis/PostgreSQL in production)
 sessions: dict[str, dict] = {}
+
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler():
+    return {"status": "ok"}
 
 
 @app.get("/health")
