@@ -7,6 +7,7 @@ import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
 import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import ResearchProgress, { Phase } from "@/components/ResearchProgress";
+import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -95,7 +96,7 @@ export default function ResearchSessionPage() {
   ];
 
   return (
-    <div className="min-h-screen p-6 max-w-5xl mx-auto">
+    <div className="min-h-screen p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <button
@@ -115,7 +116,7 @@ export default function ResearchSessionPage() {
               <span className="text-slate-600">·</span>
               <span className="text-sm text-slate-500">{events.length} events</span>
             </div>
-            <h1 className="text-2xl font-bold text-white">{topic}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white">{topic}</h1>
           </div>
 
           {/* Share button */}
@@ -135,7 +136,7 @@ export default function ResearchSessionPage() {
       {status === "running" && <ResearchProgress phase={phase} />}
 
       {/* Tabs */}
-      <div className="flex gap-1 glass rounded-lg p-1 mb-6 w-fit">
+      <div className="flex gap-1 glass rounded-lg p-1 mb-6 w-full sm:w-fit overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -171,13 +172,10 @@ export default function ResearchSessionPage() {
               {graph.entities.length} entities · {graph.relationships.length} relationships · scroll to zoom · drag to pan
             </p>
           )}
-          {graph.entities.length === 0 ? (
-            <div className="text-center py-16 text-slate-500 text-sm">
-              Knowledge graph will appear after synthesis completes
-            </div>
-          ) : (
-            <KnowledgeGraphView graph={graph} />
-          )}
+          {graph.entities.length === 0
+            ? <KnowledgeGraphEmpty status={status} phase={phase} />
+            : <KnowledgeGraphView graph={graph} />
+          }
         </div>
       )}
 

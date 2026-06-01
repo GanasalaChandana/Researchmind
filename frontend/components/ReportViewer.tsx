@@ -20,12 +20,12 @@ export default function ReportViewer({ report }: { report: ResearchReport }) {
   return (
     <div className="space-y-8">
       {/* Header row with export button */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">{report.topic}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+        <h1 className="text-lg sm:text-xl font-bold text-white">{report.topic}</h1>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-colors w-full sm:w-auto"
         >
           {exporting
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting...</>

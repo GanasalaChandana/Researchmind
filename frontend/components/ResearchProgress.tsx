@@ -45,7 +45,7 @@ export default function ResearchProgress({ phase }: { phase: Phase }) {
                   : p.icon
                 }
               </div>
-              <span className={`text-xs font-medium ${isActive ? "text-white" : isDone ? "text-emerald-400" : "text-slate-500"}`}>
+              <span className={`text-xs font-medium hidden sm:block ${isActive ? "text-white" : isDone ? "text-emerald-400" : "text-slate-500"}`}>
                 {p.label}
               </span>
               {isActive && (
