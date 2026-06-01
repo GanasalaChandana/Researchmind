@@ -76,6 +76,12 @@ async def list_sessions(limit: int = 20) -> list[dict]:
         return [_row_to_dict(r) for r in rows]
 
 
+async def delete_session(session_id: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM sessions WHERE id=$1", session_id)
+
+
 def _row_to_dict(row) -> dict:
     d = dict(row)
     if d.get("report") and isinstance(d["report"], str):

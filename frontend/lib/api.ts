@@ -22,3 +22,13 @@ export async function getReport(sessionId: string) {
   if (!res.ok) throw new Error("Report not found");
   return res.json();
 }
+
+export async function deleteResearch(sessionId: string): Promise<void> {
+  await fetch(`/api/research/${sessionId}`, { method: "DELETE" });
+}
+
+export async function retryResearch(sessionId: string): Promise<{ session_id: string; topic: string }> {
+  const res = await fetch(`/api/research/${sessionId}/retry`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to retry");
+  return res.json();
+}

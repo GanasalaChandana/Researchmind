@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { startResearch } from "@/lib/api";
+import { startResearch, deleteResearch, retryResearch } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, ChevronRight, Clock,
-  CheckCircle2, XCircle, Loader2, Filter
+  CheckCircle2, XCircle, Loader2, Filter,
+  Trash2, RefreshCw, MoreHorizontal, GitCompare
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -32,6 +33,10 @@ export default function HomePage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [historySearch, setHistorySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "failed">("all");
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/research/sessions")
@@ -40,7 +45,23 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  // Filtered sessions
+  // Topic suggestions from history
+  useEffect(() => {
+    if (!topic.trim() || topic.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const matches = sessions
+      .filter(s => s.status === "completed" &&
+        s.topic.toLowerCase().includes(topic.toLowerCase()) &&
+        s.topic.toLowerCase() !== topic.toLowerCase())
+      .map(s => s.topic)
+      .slice(0, 4);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  }, [topic, sessions]);
+
   const filteredSessions = useMemo(() => {
     return sessions.filter((s) => {
       const matchTopic = s.topic.toLowerCase().includes(historySearch.toLowerCase());
@@ -52,6 +73,7 @@ export default function HomePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!topic.trim()) return;
+    setShowSuggestions(false);
     setLoading(true);
     try {
       const { session_id } = await startResearch(topic.trim(), depth);
@@ -59,6 +81,29 @@ export default function HomePage() {
     } catch {
       toast.error("Failed to start research. Is the backend running?");
       setLoading(false);
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent, sessionId: string) {
+    e.stopPropagation();
+    setOpenMenu(null);
+    try {
+      await deleteResearch(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      toast.success("Session deleted");
+    } catch {
+      toast.error("Failed to delete session");
+    }
+  }
+
+  async function handleRetry(e: React.MouseEvent, sessionId: string, sessionTopic: string) {
+    e.stopPropagation();
+    setOpenMenu(null);
+    try {
+      const { session_id } = await retryResearch(sessionId);
+      router.push(`/research/${session_id}?topic=${encodeURIComponent(sessionTopic)}&depth=3`);
+    } catch {
+      toast.error("Failed to retry");
     }
   }
 
@@ -85,6 +130,7 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-2xl"
+        onClick={() => { setOpenMenu(null); setShowSuggestions(false); }}
       >
         {/* Logo */}
         <div className="text-center mb-10">
@@ -97,15 +143,42 @@ export default function HomePage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="glass rounded-2xl p-4 sm:p-6 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 z-10" />
             <input
+              ref={inputRef}
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               placeholder="What do you want to research?"
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 sm:py-4 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors text-base sm:text-lg"
               autoFocus
+              autoComplete="off"
             />
+            {/* Suggestions dropdown */}
+            <AnimatePresence>
+              {showSuggestions && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="absolute top-full left-0 right-0 mt-1 glass rounded-xl overflow-hidden z-20 border border-brand-500/20"
+                >
+                  <p className="text-xs text-slate-500 px-4 pt-3 pb-1">From your history</p>
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => { setTopic(s); setShowSuggestions(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-brand-500/10 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      {s}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
@@ -126,6 +199,17 @@ export default function HomePage() {
             {loading ? <>Launching agents...</> : <>Start Research <ChevronRight className="w-4 h-4" /></>}
           </button>
         </form>
+
+        {/* Compare link */}
+        <div className="mt-3 flex justify-end">
+          <button
+            onClick={() => router.push("/compare")}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand-400 transition-colors"
+          >
+            <GitCompare className="w-3.5 h-3.5" />
+            Compare research depths
+          </button>
+        </div>
 
         {/* Examples */}
         <div className="mt-5">
@@ -160,8 +244,6 @@ export default function HomePage() {
                   <span className="ml-2 text-xs text-slate-600">({sessions.length})</span>
                 </h2>
               </div>
-
-              {/* Search bar */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                 <input
@@ -171,8 +253,6 @@ export default function HomePage() {
                   className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500/50 transition-colors"
                 />
               </div>
-
-              {/* Status filter */}
               <div className="flex items-center gap-1">
                 <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                 {(["all", "completed", "failed"] as const).map((f) => (
@@ -180,9 +260,7 @@ export default function HomePage() {
                     key={f}
                     onClick={() => setStatusFilter(f)}
                     className={`text-xs px-2.5 py-1 rounded-full transition-colors capitalize ${
-                      statusFilter === f
-                        ? "bg-brand-500 text-white"
-                        : "text-slate-400 hover:text-slate-200 glass"
+                      statusFilter === f ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
                     }`}
                   >
                     {f}
@@ -204,23 +282,65 @@ export default function HomePage() {
                   </motion.div>
                 ) : (
                   filteredSessions.map((s) => (
-                    <motion.button
+                    <motion.div
                       key={s.id}
                       layout
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
-                      className="w-full glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/40 transition-colors text-left"
-                      whileHover={{ x: 2 }}
+                      exit={{ opacity: 0, scale: 0.97 }}
+                      className="relative"
                     >
-                      <StatusIcon status={s.status} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white truncate">{s.topic}</p>
-                        <p className="text-xs text-slate-500">{timeAgo(s.created_at)}</p>
+                      <button
+                        onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
+                        className="w-full glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/40 transition-colors text-left"
+                      >
+                        <StatusIcon status={s.status} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-white truncate">{s.topic}</p>
+                          <p className="text-xs text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+                      </button>
+
+                      {/* Actions menu */}
+                      <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === s.id ? null : s.id); }}
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+
+                        <AnimatePresence>
+                          {openMenu === s.id && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              className="absolute right-0 top-8 glass rounded-xl overflow-hidden z-30 w-36 border border-white/10"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {s.status === "failed" && (
+                                <button
+                                  onClick={(e) => handleRetry(e, s.id, s.topic)}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5 text-brand-400" />
+                                  Retry
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => handleDelete(e, s.id)}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                                Delete
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
-                    </motion.button>
+                    </motion.div>
                   ))
                 )}
               </AnimatePresence>

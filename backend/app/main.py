@@ -14,7 +14,7 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session
 from .tools.error_handler import friendly_error
 
 
@@ -115,6 +115,26 @@ async def get_report(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@app.delete("/research/{session_id}")
+async def delete_research(session_id: str):
+    _mem.pop(session_id, None)
+    try:
+        await delete_session(session_id)
+    except Exception:
+        pass
+    return {"status": "deleted"}
+
+
+@app.post("/research/{session_id}/retry")
+async def retry_research(session_id: str):
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    new_id = str(uuid.uuid4())
+    await _create(new_id, session["topic"])
+    return {"session_id": new_id, "topic": session["topic"]}
 
 
 @app.get("/research/{session_id}/stream")
