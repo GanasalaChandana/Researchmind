@@ -13,7 +13,8 @@ export async function startResearch(topic: string, depth = 3): Promise<{ session
 
 export function streamResearch(sessionId: string, topic: string, depth = 3): EventSource {
   const params = new URLSearchParams({ topic, depth: String(depth) });
-  return new EventSource(`${BACKEND}/research/${sessionId}/stream?${params}`);
+  // Use Next.js API proxy to avoid Vercel SSE buffering issues
+  return new EventSource(`/api/research/${sessionId}/stream?${params}`);
 }
 
 export async function getReport(sessionId: string) {
