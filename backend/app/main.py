@@ -15,6 +15,7 @@ from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
 from .database import init_db, create_session, update_session, get_session, list_sessions
+from .tools.error_handler import friendly_error
 
 
 @asynccontextmanager
@@ -157,7 +158,7 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
 
         except Exception as e:
             await _update(session_id, "failed")
-            error_event = AgentEvent(type="error", agent="system", message=str(e))
+            error_event = AgentEvent(type="error", agent="system", message=friendly_error(e))
             yield {"data": error_event.model_dump_json()}
 
     return EventSourceResponse(event_generator())
