@@ -16,7 +16,7 @@ async def get_pool() -> asyncpg.Pool:
         # Railway uses postgres:// but asyncpg needs postgresql://
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
-        _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
+        _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5, ssl="require")
     return _pool
 
 
