@@ -2,9 +2,10 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
+from contextlib import asynccontextmanager
 from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at startup
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
@@ -13,8 +14,21 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
+from .database import init_db, create_session, update_session, get_session, list_sessions
 
-app = FastAPI(title="ResearchMind API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize DB tables on startup
+    try:
+        await init_db()
+        print("✅ Database initialized")
+    except Exception as e:
+        print(f"⚠️  Database not available: {e} — falling back to in-memory")
+    yield
+
+
+app = FastAPI(title="ResearchMind API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,8 +39,46 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# In-memory session store (swap for Redis/PostgreSQL in production)
-sessions: dict[str, dict] = {}
+# Fallback in-memory store (used if DB is unavailable)
+_mem: dict[str, dict] = {}
+
+
+async def _create(session_id: str, topic: str):
+    data = {"id": session_id, "topic": topic, "status": "running",
+            "created_at": datetime.utcnow().isoformat(), "report": None}
+    _mem[session_id] = data
+    try:
+        await create_session(session_id, topic)
+    except Exception:
+        pass  # use memory fallback
+
+
+async def _update(session_id: str, status: str, report=None):
+    if session_id in _mem:
+        _mem[session_id]["status"] = status
+        if report:
+            _mem[session_id]["report"] = report
+    try:
+        await update_session(session_id, status, report)
+    except Exception:
+        pass
+
+
+async def _get(session_id: str):
+    try:
+        row = await get_session(session_id)
+        if row:
+            return row
+    except Exception:
+        pass
+    return _mem.get(session_id)
+
+
+async def _list():
+    try:
+        return await list_sessions()
+    except Exception:
+        return sorted(_mem.values(), key=lambda s: s["created_at"], reverse=True)[:20]
 
 
 @app.options("/{rest_of_path:path}")
@@ -42,14 +94,26 @@ async def health():
 @app.post("/research/start")
 async def start_research(request: ResearchRequest):
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {
-        "id": session_id,
-        "topic": request.topic,
-        "status": "running",
-        "created_at": datetime.utcnow().isoformat(),
-        "report": None,
-    }
+    await _create(session_id, request.topic)
     return {"session_id": session_id}
+
+
+@app.get("/research/sessions/list")
+async def get_sessions():
+    sessions = await _list()
+    # Strip large report field from list view for performance
+    return [
+        {k: v for k, v in s.items() if k != "report"}
+        for s in sessions
+    ]
+
+
+@app.get("/research/{session_id}/report")
+async def get_report(session_id: str):
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
 
 @app.get("/research/{session_id}/stream")
@@ -87,30 +151,13 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
             # Phase 4: Synthesize
             async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions):
                 if report:
-                    if session_id in sessions:
-                        sessions[session_id]["report"] = report.model_dump()
-                        sessions[session_id]["status"] = "completed"
+                    await _update(session_id, "completed", report.model_dump())
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
         except Exception as e:
-            if session_id in sessions:
-                sessions[session_id]["status"] = "failed"
+            await _update(session_id, "failed")
             error_event = AgentEvent(type="error", agent="system", message=str(e))
             yield {"data": error_event.model_dump_json()}
 
     return EventSourceResponse(event_generator())
-
-
-@app.get("/research/{session_id}/report")
-async def get_report(session_id: str):
-    session = sessions.get(session_id)
-    if not session:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session
-
-
-@app.get("/research/sessions/list")
-async def list_sessions():
-    return list(sessions.values())

@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { startResearch } from "@/lib/api";
 import { motion } from "framer-motion";
-import { Search, Sparkles, ChevronRight } from "lucide-react";
+import { Search, Sparkles, ChevronRight, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const EXAMPLE_TOPICS = [
@@ -14,11 +14,26 @@ const EXAMPLE_TOPICS = [
   "History and evolution of the internet",
 ];
 
+interface SessionSummary {
+  id: string;
+  topic: string;
+  status: "running" | "completed" | "failed";
+  created_at: string;
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [topic, setTopic] = useState("");
   const [depth, setDepth] = useState(3);
   const [loading, setLoading] = useState(false);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+
+  useEffect(() => {
+    fetch("/api/research/sessions")
+      .then((r) => r.json())
+      .then((data) => setSessions(data))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,8 +48,25 @@ export default function HomePage() {
     }
   }
 
+  function timeAgo(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(mins / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (mins > 0) return `${mins}m ago`;
+    return "just now";
+  }
+
+  const StatusIcon = ({ status }: { status: string }) => {
+    if (status === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />;
+    if (status === "failed") return <XCircle className="w-4 h-4 text-red-400 shrink-0" />;
+    return <Loader2 className="w-4 h-4 text-brand-400 animate-spin shrink-0" />;
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -65,16 +97,11 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             <label className="text-sm text-slate-400 shrink-0">Research depth</label>
             <input
-              type="range"
-              min={2}
-              max={5}
-              value={depth}
+              type="range" min={2} max={5} value={depth}
               onChange={(e) => setDepth(Number(e.target.value))}
               className="flex-1 accent-brand-500"
             />
-            <span className="text-sm text-slate-300 w-24 text-right">
-              {depth} sub-questions
-            </span>
+            <span className="text-sm text-slate-300 w-24 text-right">{depth} sub-questions</span>
           </div>
 
           <button
@@ -82,13 +109,7 @@ export default function HomePage() {
             disabled={loading || !topic.trim()}
             className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-xl transition-colors"
           >
-            {loading ? (
-              <>Launching agents...</>
-            ) : (
-              <>
-                Start Research <ChevronRight className="w-4 h-4" />
-              </>
-            )}
+            {loading ? <>Launching agents...</> : <>Start Research <ChevronRight className="w-4 h-4" /></>}
           </button>
         </form>
 
@@ -107,6 +128,38 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+
+        {/* History */}
+        {sessions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="mt-10"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-4 h-4 text-slate-500" />
+              <h2 className="text-sm font-medium text-slate-400">Recent Research</h2>
+            </div>
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <motion.button
+                  key={s.id}
+                  onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
+                  className="w-full glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/40 transition-colors text-left"
+                  whileHover={{ x: 2 }}
+                >
+                  <StatusIcon status={s.status} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-white truncate">{s.topic}</p>
+                    <p className="text-xs text-slate-500">{timeAgo(s.created_at)}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );
