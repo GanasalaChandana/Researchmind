@@ -177,7 +177,10 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
             # Phase 4: Synthesize
             async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions):
                 if report:
-                    await _update(session_id, "completed", report.model_dump())
+                    # Ensure sources are included when saving
+                    report_dict = report.model_dump()
+                    report_dict["sources"] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in enriched_sources]
+                    await _update(session_id, "completed", report_dict)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
