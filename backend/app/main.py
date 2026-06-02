@@ -171,9 +171,18 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
             # Phase 4: Synthesize
             async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions):
                 if report:
+                    # Deduplicate sources by title before saving (final safety check)
+                    seen_titles = set()
+                    unique_sources = []
+                    for s in enriched_sources:
+                        title_lower = s.title.lower().strip() if hasattr(s, 'title') else ""
+                        if title_lower not in seen_titles:
+                            unique_sources.append(s)
+                            seen_titles.add(title_lower)
+
                     # Ensure sources are included when saving
                     report_dict = report.model_dump()
-                    report_dict["sources"] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in enriched_sources]
+                    report_dict["sources"] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in unique_sources]
                     await _update(session_id, "completed", report_dict)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
