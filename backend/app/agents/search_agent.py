@@ -18,6 +18,7 @@ async def search(sub_questions: list[str]) -> AsyncGenerator[tuple[AgentEvent, l
     Sources are deduplicated by URL across all questions.
     """
     seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
     all_sources: list[Source] = []
 
     for i, question in enumerate(sub_questions):
@@ -37,9 +38,16 @@ async def search(sub_questions: list[str]) -> AsyncGenerator[tuple[AgentEvent, l
             ), []
             continue
 
-        new_sources = [s for s in results if _normalize_url(s.url) not in seen_urls]
-        for s in new_sources:
-            seen_urls.add(_normalize_url(s.url))
+        # Deduplicate by normalized URL AND by title (to catch exact duplicates)
+        new_sources = []
+        for s in results:
+            norm_url = _normalize_url(s.url)
+            title_lower = s.title.lower().strip() if s.title else ""
+            if norm_url not in seen_urls and title_lower not in seen_titles:
+                new_sources.append(s)
+                seen_urls.add(norm_url)
+                seen_titles.add(title_lower)
+
         all_sources.extend(new_sources)
 
         yield AgentEvent(
