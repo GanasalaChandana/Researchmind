@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
@@ -45,12 +46,24 @@ Return a JSON object:
 Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown."""
 
-    kg_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": kg_prompt}],
-        max_tokens=2000,
-        temperature=0.2,
-    )
+    # Retry logic for knowledge graph extraction
+    kg_response = None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            kg_response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": kg_prompt}],
+                max_tokens=2000,
+                temperature=0.2,
+            )
+            break
+        except Exception as e:
+            if attempt < max_retries - 1 and ("rate" in str(e).lower() or "429" in str(e)):
+                delay = 2 * (2 ** attempt)
+                await asyncio.sleep(delay)
+            else:
+                raise
 
     kg_raw = kg_response.choices[0].message.content.strip()
     try:
@@ -100,12 +113,24 @@ Return a JSON object:
 
 Write 4-5 sections. Return only valid JSON, no markdown fences."""
 
-    report_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": report_prompt}],
-        max_tokens=3000,
-        temperature=0.3,
-    )
+    # Retry logic for report generation
+    report_response = None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            report_response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": report_prompt}],
+                max_tokens=3000,
+                temperature=0.3,
+            )
+            break
+        except Exception as e:
+            if attempt < max_retries - 1 and ("rate" in str(e).lower() or "429" in str(e)):
+                delay = 2 * (2 ** attempt)
+                await asyncio.sleep(delay)
+            else:
+                raise
 
     report_raw = report_response.choices[0].message.content.strip()
     try:

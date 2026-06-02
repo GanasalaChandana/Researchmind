@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent
@@ -27,12 +28,24 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=512,
-        temperature=0.3,
-    )
+    # Retry logic for rate limits
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=512,
+                temperature=0.3,
+            )
+            break
+        except Exception as e:
+            if attempt < max_retries - 1 and ("rate" in str(e).lower() or "429" in str(e)):
+                # Exponential backoff: 2s, 4s, 8s
+                delay = 2 * (2 ** attempt)
+                await asyncio.sleep(delay)
+            else:
+                raise
 
     raw = response.choices[0].message.content.strip()
     try:
