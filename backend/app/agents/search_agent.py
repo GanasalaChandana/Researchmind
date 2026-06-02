@@ -1,6 +1,15 @@
 from typing import AsyncGenerator
+from urllib.parse import urlparse
 from ..models.schemas import AgentEvent, Source
 from ..tools.web_search import web_search
+
+
+def _normalize_url(url: str) -> str:
+    """Normalize URL for deduplication (remove trailing slash, query params)"""
+    parsed = urlparse(url)
+    # Use scheme + netloc + path (without query/fragment)
+    normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip('/')
+    return normalized
 
 
 async def search(sub_questions: list[str]) -> AsyncGenerator[tuple[AgentEvent, list[Source]], None]:
@@ -28,9 +37,9 @@ async def search(sub_questions: list[str]) -> AsyncGenerator[tuple[AgentEvent, l
             ), []
             continue
 
-        new_sources = [s for s in results if s.url not in seen_urls]
+        new_sources = [s for s in results if _normalize_url(s.url) not in seen_urls]
         for s in new_sources:
-            seen_urls.add(s.url)
+            seen_urls.add(_normalize_url(s.url))
         all_sources.extend(new_sources)
 
         yield AgentEvent(
