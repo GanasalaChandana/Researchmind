@@ -8,6 +8,9 @@ import { exportToPdf } from "@/lib/exportPdf";
 export default function ReportViewer({ report }: { report: ResearchReport }) {
   const [exporting, setExporting] = useState(false);
 
+  // Debug: log sources
+  console.log("ReportViewer sources:", report.sources);
+
   async function handleExport() {
     setExporting(true);
     try {
