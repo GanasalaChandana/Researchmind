@@ -21,6 +21,9 @@ export default function ComparePage() {
         startResearch(topic.trim(), 3),
         startResearch(topic.trim(), 5),
       ]);
+      // Save both session IDs to localStorage
+      const existing: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
+      localStorage.setItem("rm_sessions", JSON.stringify([res1.session_id, res2.session_id, ...existing]));
       router.push(
         `/compare/${res1.session_id}/${res2.session_id}?topic=${encodeURIComponent(topic.trim())}`
       );

@@ -39,9 +39,17 @@ export default function HomePage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Only load sessions started in this browser session
+    const localIds: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
+    if (localIds.length === 0) return;
+
     fetch("/api/research/sessions")
       .then((r) => r.json())
-      .then((data) => setSessions(data))
+      .then((data: SessionSummary[]) => {
+        // Filter to only show sessions this user started
+        const mine = data.filter((s) => localIds.includes(s.id));
+        setSessions(mine);
+      })
       .catch(() => {});
   }, []);
 
@@ -77,6 +85,9 @@ export default function HomePage() {
     setLoading(true);
     try {
       const { session_id } = await startResearch(topic.trim(), depth);
+      // Save to localStorage so only this browser sees it in history
+      const existing: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
+      localStorage.setItem("rm_sessions", JSON.stringify([session_id, ...existing]));
       router.push(`/research/${session_id}?topic=${encodeURIComponent(topic.trim())}&depth=${depth}`);
     } catch {
       toast.error("Failed to start research. Is the backend running?");
