@@ -16,10 +16,10 @@ async def read_sources(sources: list[Source]) -> AsyncGenerator[tuple[AgentEvent
         ), source
 
         content = await read_url(source.url)
-        if not content:
-            continue
 
-        prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points.
+        # Always update summary, even if content is empty
+        if content:
+            prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points.
 
 Title: {source.title}
 Content:
@@ -27,20 +27,25 @@ Content:
 
 Return only the summary, no preamble."""
 
-        try:
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.2,
-            )
-            source.summary = response.choices[0].message.content.strip()
-        except Exception:
-            pass  # keep the original DuckDuckGo snippet
+            try:
+                response = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.2,
+                )
+                source.summary = response.choices[0].message.content.strip()
+            except Exception:
+                # If summarization fails, keep the original snippet
+                pass
+        else:
+            # If read_url fails, use original snippet if available
+            if not source.summary:
+                source.summary = f"Unable to fetch full content. URL: {source.url}"
 
         yield AgentEvent(
             type="reading",
             agent="reader_agent",
-            message=f"Summarized: {source.title}",
+            message=f"Summarized: {source.title or source.url}",
             data={"url": source.url, "summary": source.summary},
         ), source
