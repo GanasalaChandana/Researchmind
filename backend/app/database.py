@@ -33,6 +33,14 @@ async def init_db():
             )
         """)
 
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS research_cache (
+                topic_normalized TEXT PRIMARY KEY,
+                report JSONB NOT NULL,
+                cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
 
 async def create_session(session_id: str, topic: str):
     pool = await get_pool()
@@ -80,6 +88,49 @@ async def delete_session(session_id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM sessions WHERE id=$1", session_id)
+
+
+def _normalize_topic(topic: str) -> str:
+    """Normalize topic for cache lookup (lowercase, remove extra spaces)"""
+    return topic.lower().strip()
+
+
+async def get_cached_research(topic: str) -> Optional[dict]:
+    """Get cached research report if available"""
+    try:
+        pool = await get_pool()
+        topic_normalized = _normalize_topic(topic)
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT report FROM research_cache WHERE topic_normalized=$1",
+                topic_normalized,
+            )
+            if row and row["report"]:
+                report = row["report"]
+                if isinstance(report, str):
+                    report = json.loads(report)
+                return report
+    except Exception:
+        pass  # Cache miss or DB error, return None
+    return None
+
+
+async def cache_research(topic: str, report: dict):
+    """Cache a completed research report"""
+    try:
+        pool = await get_pool()
+        topic_normalized = _normalize_topic(topic)
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO research_cache (topic_normalized, report)
+                   VALUES ($1, $2)
+                   ON CONFLICT (topic_normalized) DO UPDATE
+                   SET report=$2, cached_at=NOW()""",
+                topic_normalized,
+                json.dumps(report),
+            )
+    except Exception:
+        pass  # Cache write failure is not fatal
 
 
 def _row_to_dict(row) -> dict:

@@ -14,7 +14,7 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research
 from .tools.error_handler import friendly_error
 
 
@@ -144,6 +144,27 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
         sub_questions = []
 
         try:
+            # Check cache first
+            cached_report = await get_cached_research(topic)
+            if cached_report:
+                yield {"data": AgentEvent(
+                    type="thinking",
+                    agent="system",
+                    message="✨ Returning cached research result — no API calls needed!",
+                ).model_dump_json()}
+
+                # Save cached result to session
+                await _update(session_id, "completed", cached_report)
+
+                # Stream the cached report as if it was just generated
+                yield {"data": AgentEvent(
+                    type="done",
+                    agent="system",
+                    message="Research complete (from cache).",
+                    data={"report": cached_report},
+                ).model_dump_json()}
+                return
+
             # Phase 1: Orchestrator
             async for event in orchestrate(topic, depth):
                 if event.data and "sub_questions" in event.data:
@@ -184,6 +205,10 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
                     report_dict = report.model_dump()
                     report_dict["sources"] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in unique_sources]
                     await _update(session_id, "completed", report_dict)
+
+                    # Cache the completed research for future queries
+                    await cache_research(topic, report_dict)
+
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
