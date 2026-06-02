@@ -28,8 +28,8 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    # Retry logic for rate limits
-    max_retries = 3
+    # Retry logic for rate limits - with aggressive backoff for free tier
+    max_retries = 4
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
@@ -40,9 +40,10 @@ Return only valid JSON, no markdown fences."""
             )
             break
         except Exception as e:
-            if attempt < max_retries - 1 and ("rate" in str(e).lower() or "429" in str(e)):
-                # Exponential backoff: 2s, 4s, 8s
-                delay = 2 * (2 ** attempt)
+            error_str = str(e).lower()
+            if attempt < max_retries - 1 and ("rate" in error_str or "429" in error_str or "overloaded" in error_str):
+                # Longer backoff for free tier: 5s, 15s, 30s, 60s
+                delay = 5 * (3 ** attempt)
                 await asyncio.sleep(delay)
             else:
                 raise
