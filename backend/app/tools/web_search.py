@@ -1,34 +1,37 @@
-import asyncio
-from duckduckgo_search import DDGS
+import httpx
 from ..models.schemas import Source
+from ..config import TAVILY_API_KEY
 
 
 async def web_search(query: str, max_results: int = 5) -> list[Source]:
-    """Search with retry logic to handle rate limiting"""
+    """Search using Tavily API with structured results"""
     sources = []
-    max_retries = 3
-    base_delay = 1
 
-    for attempt in range(max_retries):
-        try:
-            with DDGS(timeout=10) as ddgs:
-                results = list(ddgs.text(query, max_results=max_results))
+    try:
+        payload = {
+            "api_key": TAVILY_API_KEY,
+            "query": query,
+            "max_results": min(max_results, 5),
+            "search_depth": "basic",
+            "include_answer": False,
+        }
 
-            for r in results:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.tavily.com/search",
+                json=payload
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            for result in data.get("results", []):
                 sources.append(Source(
-                    url=r.get("href", ""),
-                    title=r.get("title", ""),
-                    summary=r.get("body", ""),
-                    relevance_score=1.0,
+                    url=result.get("url", ""),
+                    title=result.get("title", ""),
+                    summary=result.get("content", ""),
+                    relevance_score=result.get("score", 0.5),
                 ))
-            return sources
-        except Exception as e:
-            if attempt < max_retries - 1:
-                # Exponential backoff: 1s, 2s, 4s
-                delay = base_delay * (2 ** attempt)
-                await asyncio.sleep(delay)
-            else:
-                # Last attempt failed, return empty results
-                return sources
+    except Exception as e:
+        raise Exception(f"Web search failed: {str(e)}")
 
     return sources

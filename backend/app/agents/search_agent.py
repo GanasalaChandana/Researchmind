@@ -1,5 +1,4 @@
 from typing import AsyncGenerator
-import asyncio
 from ..models.schemas import AgentEvent, Source
 from ..tools.web_search import web_search
 
@@ -13,10 +12,6 @@ async def search(sub_questions: list[str]) -> AsyncGenerator[tuple[AgentEvent, l
     all_sources: list[Source] = []
 
     for i, question in enumerate(sub_questions):
-        # Add delay between searches to avoid rate limiting
-        if i > 0:
-            await asyncio.sleep(3)
-
         yield AgentEvent(
             type="searching",
             agent="search_agent",
