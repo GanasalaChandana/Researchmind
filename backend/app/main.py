@@ -160,19 +160,13 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
-            yield {"data": AgentEvent(type="thinking", agent="system", message=f"DEBUG: Found {len(all_sources)} sources after search").model_dump_json()}
-
             # Phase 3: Read sources (top 6 by relevance)
             top_sources = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
-            yield {"data": AgentEvent(type="thinking", agent="system", message=f"DEBUG: Processing {len(top_sources)} top sources").model_dump_json()}
             enriched_sources = []
             async for event, source in read_sources(top_sources):
-                if source not in enriched_sources:
-                    enriched_sources.append(source)
+                enriched_sources.append(source)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
-
-            yield {"data": AgentEvent(type="thinking", agent="system", message=f"DEBUG: Enriched sources count = {len(enriched_sources)}").model_dump_json()}
 
             # Phase 4: Synthesize
             async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions):
