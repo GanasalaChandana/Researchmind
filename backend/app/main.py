@@ -16,6 +16,7 @@ from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
 from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research
 from .tools.error_handler import friendly_error
+from .tools.export_formats import export_markdown, export_html, format_citations
 
 
 @asynccontextmanager
@@ -100,12 +101,32 @@ async def start_research(request: ResearchRequest):
 
 
 @app.get("/research/sessions/list")
-async def get_sessions():
+async def get_sessions(
+    status: str = None,
+    search: str = None,
+    days: int = None,
+    limit: int = 20,
+):
+    """List sessions with optional filters"""
     sessions = await _list()
+
+    # Apply filters in-memory as fallback
+    filtered = sessions
+    if status:
+        filtered = [s for s in filtered if s.get("status") == status]
+    if search:
+        filtered = [s for s in filtered if search.lower() in s.get("topic", "").lower()]
+    if days:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
+
+    filtered = filtered[:limit]
+
     # Strip large report field from list view for performance
     return [
         {k: v for k, v in s.items() if k != "report"}
-        for s in sessions
+        for s in filtered
     ]
 
 
@@ -218,3 +239,85 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
             yield {"data": error_event.model_dump_json()}
 
     return EventSourceResponse(event_generator())
+
+
+@app.get("/research/{session_id}/export/{format_type}")
+async def export_research(session_id: str, format_type: str):
+    """Export research report in different formats"""
+    session = await _get(session_id)
+    if not session or not session.get("report"):
+        raise HTTPException(status_code=404, detail="Session or report not found")
+
+    report_dict = session["report"]
+    if isinstance(report_dict, str):
+        report_dict = json.loads(report_dict)
+
+    # Reconstruct ResearchReport object from dict
+    from .models.schemas import ResearchReport, Source, Section
+    report = ResearchReport(**report_dict)
+
+    if format_type == "markdown":
+        content = export_markdown(report)
+        return {
+            "content": content,
+            "filename": f"{session_id}.md",
+            "mime_type": "text/markdown",
+        }
+    elif format_type == "html":
+        content = export_html(report)
+        return {
+            "content": content,
+            "filename": f"{session_id}.html",
+            "mime_type": "text/html",
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported format")
+
+
+@app.get("/research/{session_id}/citations")
+async def get_citations(session_id: str, style: str = "apa"):
+    """Get formatted citations for research"""
+    session = await _get(session_id)
+    if not session or not session.get("report"):
+        raise HTTPException(status_code=404, detail="Session or report not found")
+
+    report_dict = session["report"]
+    if isinstance(report_dict, str):
+        report_dict = json.loads(report_dict)
+
+    sources = report_dict.get("sources", [])
+    return {
+        "citations": format_citations(style, sources),
+        "style": style,
+    }
+
+
+@app.post("/research/{session_id}/share")
+async def create_share_link(session_id: str):
+    """Create a shareable link for the research"""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Generate a simple share token (in production, use more secure tokens)
+    share_token = str(uuid.uuid4())[:8].upper()
+
+    return {
+        "session_id": session_id,
+        "share_token": share_token,
+        "share_url": f"/shared/{share_token}",
+        "expires_in": "30 days",
+    }
+
+
+@app.get("/shared/{share_token}")
+async def get_shared_research(share_token: str):
+    """Access shared research (simplified - in production add token validation)"""
+    # For now, this is a placeholder. In production:
+    # 1. Store share tokens in database with expiry
+    # 2. Link tokens to session IDs
+    # 3. Validate token before returning data
+    return {
+        "message": "Shared research endpoint. Implement token validation in production.",
+        "token": share_token,
+    }

@@ -75,12 +75,33 @@ async def get_session(session_id: str) -> Optional[dict]:
         return _row_to_dict(row)
 
 
-async def list_sessions(limit: int = 20) -> list[dict]:
+async def list_sessions(
+    limit: int = 20,
+    status: str = None,
+    search_query: str = None,
+    days_back: int = None,
+) -> list[dict]:
+    """List sessions with optional filtering"""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM sessions ORDER BY created_at DESC LIMIT $1", limit
-        )
+        query = "SELECT * FROM sessions WHERE 1=1"
+        params = []
+
+        if status:
+            query += " AND status = $" + str(len(params) + 1)
+            params.append(status)
+
+        if search_query:
+            query += " AND (topic ILIKE $" + str(len(params) + 1) + ")"
+            params.append(f"%{search_query}%")
+
+        if days_back:
+            query += " AND created_at > NOW() - INTERVAL '" + str(days_back) + " days'"
+
+        query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
+        params.append(limit)
+
+        rows = await conn.fetch(query, *params)
         return [_row_to_dict(r) for r in rows]
 
 
