@@ -30,7 +30,7 @@ Return only valid JSON, no markdown fences."""
 
     # Call Claude API (much more reliable than Groq free tier)
     response = client.messages.create(
-        model="claude-3-opus-20250729",
+        model="claude-opus-4-1",
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )

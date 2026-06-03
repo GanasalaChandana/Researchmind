@@ -48,7 +48,7 @@ Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdow
 
     # Call Claude for knowledge graph extraction
     kg_response = client.messages.create(
-        model="claude-3-opus-20250729",
+        model="claude-opus-4-1",
         max_tokens=2000,
         messages=[{"role": "user", "content": kg_prompt}],
     )
@@ -103,7 +103,7 @@ Write 4-5 sections. Return only valid JSON, no markdown fences."""
 
     # Call Claude for report generation
     report_response = client.messages.create(
-        model="claude-3-opus-20250729",
+        model="claude-opus-4-1",
         max_tokens=3000,
         messages=[{"role": "user", "content": report_prompt}],
     )
