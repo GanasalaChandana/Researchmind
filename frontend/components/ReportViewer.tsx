@@ -8,8 +8,34 @@ import { exportToPdf } from "@/lib/exportPdf";
 export default function ReportViewer({ report }: { report: ResearchReport }) {
   const [exporting, setExporting] = useState(false);
 
-  // Debug: log sources
-  console.log("ReportViewer sources:", report.sources);
+  // Deduplicate sources by title (frontend safety check) and create citation mapping
+  const deduplicationResult = (() => {
+    const seen = new Map<string, number>();
+    const unique = [];
+    const indexMap: { [oldIndex: number]: number } = {}; // Maps old citation index to new
+
+    for (let i = 0; i < (report.sources || []).length; i++) {
+      const source = report.sources[i];
+      const titleLower = (source.title || "").toLowerCase().trim();
+
+      if (titleLower && seen.has(titleLower)) {
+        // Duplicate - map to existing index
+        indexMap[i] = seen.get(titleLower)!;
+      } else {
+        // New source
+        if (titleLower) {
+          seen.set(titleLower, unique.length);
+        }
+        indexMap[i] = unique.length;
+        unique.push(source);
+      }
+    }
+
+    return { uniqueSources: unique, indexMap };
+  })();
+
+  const uniqueSources = deduplicationResult.uniqueSources;
+  const indexMap = deduplicationResult.indexMap;
 
   async function handleExport() {
     setExporting(true);
@@ -57,17 +83,21 @@ export default function ReportViewer({ report }: { report: ResearchReport }) {
             <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">{section.content}</p>
             {section.citations?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {section.citations.map((c) => (
-                  <a
-                    key={c}
-                    href={report.sources[c - 1]?.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full hover:bg-brand-500/30 transition-colors"
-                  >
-                    [{c}] <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
-                ))}
+                {section.citations.map((c) => {
+                  const newIndex = indexMap[c - 1];
+                  const source = uniqueSources[newIndex];
+                  return (
+                    <a
+                      key={c}
+                      href={source?.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full hover:bg-brand-500/30 transition-colors"
+                    >
+                      [{newIndex + 1}] <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  );
+                })}
               </div>
             )}
           </motion.div>
@@ -76,9 +106,9 @@ export default function ReportViewer({ report }: { report: ResearchReport }) {
 
       {/* Sources */}
       <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Sources</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Sources ({uniqueSources.length})</h2>
         <div className="space-y-3">
-          {report.sources.map((source, i) => (
+          {uniqueSources.map((source, i) => (
             <div key={i} className="glass rounded-lg p-4 flex gap-4">
               <span className="text-brand-400 font-mono text-sm shrink-0 mt-0.5">[{i + 1}]</span>
               <div className="min-w-0">
