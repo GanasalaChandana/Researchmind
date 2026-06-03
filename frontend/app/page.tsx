@@ -36,6 +36,8 @@ export default function HomePage() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [daysFilter, setDaysFilter] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -74,9 +76,18 @@ export default function HomePage() {
     return sessions.filter((s) => {
       const matchTopic = s.topic.toLowerCase().includes(historySearch.toLowerCase());
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
-      return matchTopic && matchStatus;
+
+      // Date filter
+      let matchDate = true;
+      if (daysFilter) {
+        const createdDate = new Date(s.created_at);
+        const cutoffDate = new Date(Date.now() - daysFilter * 24 * 60 * 60 * 1000);
+        matchDate = createdDate > cutoffDate;
+      }
+
+      return matchTopic && matchStatus && matchDate;
     });
-  }, [sessions, historySearch, statusFilter]);
+  }, [sessions, historySearch, statusFilter, daysFilter]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -275,6 +286,21 @@ export default function HomePage() {
                     }`}
                   >
                     {f}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date range filter */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {([7, 30, 90, null] as const).map((days) => (
+                  <button
+                    key={days ?? "all"}
+                    onClick={() => setDaysFilter(days)}
+                    className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                      daysFilter === days ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
+                    }`}
+                  >
+                    {days ? `${days}d` : "All"}
                   </button>
                 ))}
               </div>

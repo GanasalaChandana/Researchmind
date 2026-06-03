@@ -1,12 +1,16 @@
 "use client";
 import { useState } from "react";
 import { ResearchReport } from "@/lib/types";
-import { ExternalLink, Download, Loader2 } from "lucide-react";
+import { ExternalLink, Download, Loader2, Share2, FileText, Copy, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { exportToPdf } from "@/lib/exportPdf";
+import toast from "react-hot-toast";
 
-export default function ReportViewer({ report }: { report: ResearchReport }) {
+export default function ReportViewer({ report, sessionId }: { report: ResearchReport; sessionId?: string }) {
   const [exporting, setExporting] = useState(false);
+  const [citationStyle, setCitationStyle] = useState<"apa" | "mla" | "chicago">("apa");
+  const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Deduplicate sources by title (frontend safety check) and create citation mapping
   const deduplicationResult = (() => {
@@ -46,21 +50,130 @@ export default function ReportViewer({ report }: { report: ResearchReport }) {
     }
   }
 
+  async function handleExportMarkdown() {
+    try {
+      const response = await fetch(`/api/research/${sessionId}/export/markdown`);
+      const data = await response.json();
+      const element = document.createElement("a");
+      element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(data.content));
+      element.setAttribute("download", data.filename);
+      element.style.display = "none";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast.success("Markdown exported!");
+    } catch (err) {
+      toast.error("Failed to export markdown");
+    }
+  }
+
+  async function handleExportHTML() {
+    try {
+      const response = await fetch(`/api/research/${sessionId}/export/html`);
+      const data = await response.json();
+      const element = document.createElement("a");
+      element.setAttribute("href", "data:text/html;charset=utf-8," + encodeURIComponent(data.content));
+      element.setAttribute("download", data.filename);
+      element.style.display = "none";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast.success("HTML exported!");
+    } catch (err) {
+      toast.error("Failed to export HTML");
+    }
+  }
+
+  async function handleShare() {
+    try {
+      const response = await fetch(`/api/research/${sessionId}/share`, { method: "POST" });
+      const data = await response.json();
+      const shareUrl = `${window.location.origin}/shared/${data.share_token}`;
+      navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Share link copied!");
+    } catch (err) {
+      toast.error("Failed to create share link");
+    }
+  }
+
   return (
     <div className="space-y-8">
-      {/* Header row with export button */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-        <h1 className="text-lg sm:text-xl font-bold text-white">{report.topic}</h1>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-colors w-full sm:w-auto"
-        >
-          {exporting
-            ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting...</>
-            : <><Download className="w-4 h-4" /> Export PDF</>
-          }
-        </button>
+      {/* Header row with export buttons */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl font-bold text-white">{report.topic}</h1>
+          <button
+            onClick={() => setShowShare(!showShare)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="text-sm">Share</span>
+          </button>
+        </div>
+
+        {/* Share Modal */}
+        {showShare && (
+          <div className="glass rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                readOnly
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/shared/link`}
+                className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-slate-300"
+              />
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2 px-3 py-2 bg-brand-500 hover:bg-brand-600 rounded transition-colors text-white"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Export options */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            PDF
+          </button>
+          <button
+            onClick={handleExportMarkdown}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Markdown
+          </button>
+          <button
+            onClick={handleExportHTML}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            HTML
+          </button>
+        </div>
+
+        {/* Citation format selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">Citation style:</span>
+          {(["apa", "mla", "chicago"] as const).map((style) => (
+            <button
+              key={style}
+              onClick={() => setCitationStyle(style)}
+              className={`text-xs px-3 py-1 rounded transition-colors uppercase ${
+                citationStyle === style ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
+              }`}
+            >
+              {style}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Summary */}

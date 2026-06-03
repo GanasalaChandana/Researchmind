@@ -239,7 +239,7 @@ export default function ResearchSessionPage() {
 
       {tab === "report" && (
         report
-          ? <ReportViewer report={report} />
+          ? <ReportViewer report={report} sessionId={sessionId} />
           : (
             <div className="text-center py-16 text-slate-500 text-sm">
               Report will appear when research is complete
