@@ -1,14 +1,14 @@
 import json
 import re
 import asyncio
-from groq import Groq
+from anthropic import Anthropic
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent
-from ..config import GROQ_API_KEY
+from ..config import ANTHROPIC_API_KEY
 
 
 async def orchestrate(topic: str, depth: int) -> AsyncGenerator[AgentEvent, None]:
-    client = Groq(api_key=GROQ_API_KEY)
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
     yield AgentEvent(
         type="thinking",
@@ -28,27 +28,14 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    # Retry logic for rate limits - with aggressive backoff for free tier
-    max_retries = 4
-    for attempt in range(max_retries):
-        try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=512,
-                temperature=0.3,
-            )
-            break
-        except Exception as e:
-            error_str = str(e).lower()
-            if attempt < max_retries - 1 and ("rate" in error_str or "429" in error_str or "overloaded" in error_str):
-                # Longer backoff for free tier: 5s, 15s, 30s, 60s
-                delay = 5 * (3 ** attempt)
-                await asyncio.sleep(delay)
-            else:
-                raise
+    # Call Claude API (much more reliable than Groq free tier)
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
 
-    raw = response.choices[0].message.content.strip()
+    raw = response.content[0].text.strip()
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:

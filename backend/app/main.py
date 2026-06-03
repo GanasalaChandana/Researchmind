@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime
 from contextlib import asynccontextmanager
-from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at startup
+from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at startup
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

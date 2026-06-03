@@ -1,10 +1,10 @@
 import json
 import re
 import asyncio
-from groq import Groq
+from anthropic import Anthropic
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
-from ..config import GROQ_API_KEY
+from ..config import ANTHROPIC_API_KEY
 
 
 async def synthesize(
@@ -13,7 +13,7 @@ async def synthesize(
     sources: list[Source],
     sub_questions: list[str],
 ) -> AsyncGenerator[tuple[AgentEvent, ResearchReport | None], None]:
-    client = Groq(api_key=GROQ_API_KEY)
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
     yield AgentEvent(
         type="synthesizing",
@@ -46,45 +46,19 @@ Return a JSON object:
 Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown."""
 
-    # Retry logic for knowledge graph extraction - optional on free tier
-    kg_response = None
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            kg_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": kg_prompt}],
-                max_tokens=2000,
-                temperature=0.2,
-            )
-            break
-        except Exception as e:
-            error_str = str(e).lower()
-            if attempt < max_retries - 1 and ("rate" in error_str or "429" in error_str or "overloaded" in error_str):
-                # Longer backoff for free tier: 5s, 15s, 30s
-                delay = 5 * (3 ** attempt)
-                await asyncio.sleep(delay)
-            elif attempt == max_retries - 1:
-                # Skip knowledge graph if rate-limited on free tier, continue with report
-                yield AgentEvent(
-                    type="synthesizing",
-                    agent="synthesizer",
-                    message="Knowledge graph extraction skipped (rate limit) — proceeding with report",
-                ), None
-                kg_response = None
-                break
-            else:
-                raise
+    # Call Claude for knowledge graph extraction
+    kg_response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": kg_prompt}],
+    )
 
-    if kg_response:
-        kg_raw = kg_response.choices[0].message.content.strip()
-        try:
-            kg_data = json.loads(kg_raw)
-        except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", kg_raw, re.DOTALL)
-            kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
-    else:
-        kg_data = {"entities": [], "relationships": []}
+    kg_raw = kg_response.content[0].text.strip()
+    try:
+        kg_data = json.loads(kg_raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", kg_raw, re.DOTALL)
+        kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
 
     kg = KnowledgeGraph(
         entities=[Entity(**e) for e in kg_data.get("entities", [])],
@@ -127,33 +101,14 @@ Return a JSON object:
 
 Write 4-5 sections. Return only valid JSON, no markdown fences."""
 
-    # Retry logic for report generation - critical, don't skip this
-    report_response = None
-    max_retries = 4
-    for attempt in range(max_retries):
-        try:
-            report_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": report_prompt}],
-                max_tokens=3000,
-                temperature=0.3,
-            )
-            break
-        except Exception as e:
-            error_str = str(e).lower()
-            if attempt < max_retries - 1 and ("rate" in error_str or "429" in error_str or "overloaded" in error_str):
-                # Longer backoff for free tier: 5s, 15s, 30s, 60s
-                delay = 5 * (3 ** attempt)
-                yield AgentEvent(
-                    type="synthesizing",
-                    agent="synthesizer",
-                    message=f"Rate limited — retrying in {delay}s...",
-                ), None
-                await asyncio.sleep(delay)
-            else:
-                raise
+    # Call Claude for report generation
+    report_response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=3000,
+        messages=[{"role": "user", "content": report_prompt}],
+    )
 
-    report_raw = report_response.choices[0].message.content.strip()
+    report_raw = report_response.content[0].text.strip()
     try:
         report_data = json.loads(report_raw)
     except json.JSONDecodeError:
