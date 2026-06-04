@@ -21,6 +21,8 @@ from .tools.webhooks import (
     register_webhook, list_webhooks, delete_webhook,
     fire_webhook_event
 )
+from .auth.user_db import init_user_tables
+from .routes.auth import router as auth_router
 
 
 @asynccontextmanager
@@ -31,16 +33,29 @@ async def lifespan(app: FastAPI):
         print("✅ Database initialized")
     except Exception as e:
         print(f"⚠️  Database not available: {e} — falling back to in-memory")
+    try:
+        await init_user_tables()
+        print("✅ User tables initialized")
+    except Exception as e:
+        print(f"⚠️  User tables not available: {e} — using in-memory fallback")
     yield
 
 
-app = FastAPI(title="ResearchMind API", lifespan=lifespan)
+app = FastAPI(
+    title="ResearchMind API",
+    description="Multi-agent AI Research API with JWT auth, webhooks, and streaming",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Mount auth router
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )

@@ -12,6 +12,10 @@ import {
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
 import PromptCustomizer from "@/components/PromptCustomizer";
+import AuthModal from "@/components/AuthModal";
+import { useAuth } from "@/context/AuthContext";
+import { logout } from "@/lib/auth";
+import { LogIn, LogOut, UserCircle2 } from "lucide-react";
 
 const EXAMPLE_TOPICS = [
   "Impact of AI on drug discovery",
@@ -44,7 +48,9 @@ export default function HomePage() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customPrompts, setCustomPrompts] = useState<string[]>([]);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user, signOut, isAuthenticated } = useAuth();
 
   useEffect(() => {
     // Only load sessions started in this browser session
@@ -168,10 +174,42 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-      {/* Header with Theme Toggle */}
-      <div className="absolute top-4 right-4">
+      {/* Top-right: Auth + Theme */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {isAuthenticated ? (
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:flex items-center gap-1.5 text-xs dark:text-slate-400 text-slate-600">
+              <UserCircle2 className="w-4 h-4" />
+              {user?.name}
+            </span>
+            <button
+              onClick={() => { logout(localStorage.getItem("rm_refresh_token") ?? ""); signOut(); }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                         dark:text-slate-400 text-slate-600 hover:text-red-400
+                         dark:hover:bg-white/5 hover:bg-slate-100 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                       bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            Sign in
+          </button>
+        )}
         <ThemeToggle />
       </div>
+
+      {/* Auth Modal */}
+      <AnimatePresence>
+        {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+      </AnimatePresence>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

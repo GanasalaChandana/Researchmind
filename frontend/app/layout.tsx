@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "ResearchMind — AI Research Agent",
@@ -13,8 +14,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          {children}
-          <Toaster position="bottom-right" toastOptions={{ style: { background: "#1a1d2e", color: "#e2e8f0", border: "1px solid #2a2d3e" } }} />
+          <AuthProvider>
+            {children}
+            <Toaster position="bottom-right" toastOptions={{ style: { background: "#1a1d2e", color: "#e2e8f0", border: "1px solid #2a2d3e" } }} />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

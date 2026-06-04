@@ -7,16 +7,19 @@ from typing import Optional
 _pool: Optional[asyncpg.Pool] = None
 
 
-async def get_pool() -> asyncpg.Pool:
+async def get_pool() -> Optional[asyncpg.Pool]:
     global _pool
     if _pool is None:
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
-            raise RuntimeError("DATABASE_URL not set")
-        # Railway uses postgres:// but asyncpg needs postgresql://
-        if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
-        _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5, ssl="require")
+            return None
+        try:
+            # Railway uses postgres:// but asyncpg needs postgresql://
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+            _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5, ssl="require")
+        except Exception:
+            return None
     return _pool
 
 

@@ -9,6 +9,7 @@ load_dotenv(dotenv_path=_env_path, override=True, encoding="utf-8-sig")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "researchmind-change-in-production")
 
 if not ANTHROPIC_API_KEY:
     raise RuntimeError(
