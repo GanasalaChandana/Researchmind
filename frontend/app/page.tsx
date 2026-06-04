@@ -9,6 +9,7 @@ import {
   Trash2, RefreshCw, MoreHorizontal, GitCompare
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const EXAMPLE_TOPICS = [
   "Impact of AI on drug discovery",
@@ -148,6 +149,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+      {/* Header with Theme Toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -159,8 +165,8 @@ export default function HomePage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 mb-4">
             <Sparkles className="w-7 h-7 text-brand-500" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">ResearchMind</h1>
-          <p className="text-slate-400 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
+          <h1 className="text-4xl font-bold text-white dark:text-white mb-2">ResearchMind</h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
         </div>
 
         {/* Form */}
