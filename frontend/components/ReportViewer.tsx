@@ -103,23 +103,11 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
     }
   }
 
-  useEffect(() => {
-    if (!sessionId) return;
-
-    async function fetchCitations() {
-      try {
-        const response = await fetch(`/api/research/${sessionId}/citations?style=${citationStyle}`);
-        if (response.ok) {
-          const data = await response.json();
-          setCitations(data.citations || {});
-        }
-      } catch (err) {
-        console.error("Failed to fetch citations:", err);
-      }
-    }
-
-    fetchCitations();
-  }, [citationStyle, sessionId]);
+  // Citations feature temporarily disabled due to backend issues
+  // useEffect(() => {
+  //   if (!sessionId) return;
+  //   async function fetchCitations() { ... }
+  // }, [citationStyle, sessionId]);
 
   return (
     <div className="space-y-8">
@@ -182,21 +170,6 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
           </button>
         </div>
 
-        {/* Citation format selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Citation style:</span>
-          {(["apa", "mla", "chicago"] as const).map((style) => (
-            <button
-              key={style}
-              onClick={() => setCitationStyle(style)}
-              className={`text-xs px-3 py-1 rounded transition-colors uppercase ${
-                citationStyle === style ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
-              }`}
-            >
-              {style}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Summary */}
@@ -239,22 +212,6 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
           </motion.div>
         ))}
       </div>
-
-      {/* Formatted Citations */}
-      {Object.keys(citations).length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Formatted Bibliography ({citationStyle.toUpperCase()})
-          </h2>
-          <div className="glass rounded-xl p-6 space-y-3">
-            {Object.entries(citations).map(([id, citation]) => (
-              <div key={id} className="text-sm text-slate-300 leading-relaxed">
-                <span className="text-brand-400 font-semibold">[{id}]</span> {citation}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Sources */}
       <div>
