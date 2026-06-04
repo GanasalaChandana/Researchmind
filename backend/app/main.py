@@ -49,7 +49,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Mount auth router
+# Mount auth router - JWT authentication endpoints
 app.include_router(auth_router)
 
 app.add_middleware(
