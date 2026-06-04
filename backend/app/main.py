@@ -137,6 +137,16 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/debug/routers")
+async def debug_routers():
+    """Debug endpoint to check router status"""
+    return {
+        "auth_router_loaded": auth_router is not None,
+        "test_router_loaded": test_router is not None,
+        "message": "Check logs for import messages"
+    }
+
+
 @app.post("/research/start")
 async def start_research(request: ResearchRequest):
     session_id = str(uuid.uuid4())
