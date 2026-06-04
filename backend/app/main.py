@@ -8,6 +8,7 @@ from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
+from pydantic import BaseModel
 
 from .models.schemas import ResearchRequest, AgentEvent
 from .agents.orchestrator import orchestrate
@@ -441,12 +442,6 @@ async def create_share_link(session_id: str):
 # ─── Webhook Endpoints ───────────────────────────────────────────────────────
 
 class WebhookRequest(BaseModel):
-    url: str
-    events: list = ["completed", "failed"]
-    secret: str = None
-
-from pydantic import BaseModel as _Base
-class WebhookRequest(_Base):
     url: str
     events: list[str] = ["completed", "failed"]
     secret: str = None
