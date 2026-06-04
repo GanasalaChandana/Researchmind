@@ -247,5 +247,6 @@ async def change_password(
 @router.delete("/me")
 async def delete_account(current_user: dict = Depends(get_current_user)):
     """Deactivate the current user account."""
-    await update_user(current_user["id"], is_active=False)
-    return {"message": "Account deactivated. Contact support to restore."}
+    # Mark account as deleted by setting email to null/deleted indicator
+    await update_user(current_user["id"], email=f"deleted_{current_user['id']}")
+    return {"message": "Account deleted successfully"}
