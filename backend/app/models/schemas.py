@@ -7,6 +7,7 @@ import uuid
 class ResearchRequest(BaseModel):
     topic: str
     depth: int = 3  # number of sub-questions to explore
+    custom_prompts: Optional[list[str]] = None  # optional custom research questions
 
 
 class AgentEvent(BaseModel):

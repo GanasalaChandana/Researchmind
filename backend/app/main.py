@@ -159,12 +159,24 @@ async def retry_research(session_id: str):
 
 
 @app.get("/research/{session_id}/stream")
-async def stream_research(session_id: str, topic: str, depth: int = 3):
+async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None):
     async def event_generator():
         all_sources = []
         sub_questions = []
 
         try:
+            # Parse custom prompts if provided
+            if custom_prompts:
+                try:
+                    sub_questions = json.loads(custom_prompts)
+                    yield {"data": AgentEvent(
+                        type="thinking",
+                        agent="system",
+                        message=f"📋 Using {len(sub_questions)} custom research questions",
+                    ).model_dump_json()}
+                except:
+                    pass  # Fall back to orchestrator
+
             # Check cache first
             cached_report = await get_cached_research(topic)
             if cached_report:
@@ -186,12 +198,13 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
                 ).model_dump_json()}
                 return
 
-            # Phase 1: Orchestrator
-            async for event in orchestrate(topic, depth):
-                if event.data and "sub_questions" in event.data:
-                    sub_questions = event.data["sub_questions"]
-                yield {"data": event.model_dump_json()}
-                await asyncio.sleep(0)
+            # Phase 1: Orchestrator (skip if custom prompts provided)
+            if not sub_questions:
+                async for event in orchestrate(topic, depth):
+                    if event.data and "sub_questions" in event.data:
+                        sub_questions = event.data["sub_questions"]
+                    yield {"data": event.model_dump_json()}
+                    await asyncio.sleep(0)
 
             if not sub_questions:
                 sub_questions = [topic]

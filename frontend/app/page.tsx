@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
+import PromptCustomizer from "@/components/PromptCustomizer";
 
 const EXAMPLE_TOPICS = [
   "Impact of AI on drug discovery",
@@ -39,6 +40,7 @@ export default function HomePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [daysFilter, setDaysFilter] = useState<number | null>(null);
+  const [customPrompts, setCustomPrompts] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -96,7 +98,11 @@ export default function HomePage() {
     setShowSuggestions(false);
     setLoading(true);
     try {
-      const { session_id } = await startResearch(topic.trim(), depth);
+      const { session_id } = await startResearch(
+        topic.trim(),
+        depth,
+        customPrompts.length > 0 ? customPrompts : undefined
+      );
       // Save to localStorage so only this browser sees it in history
       const existing: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
       localStorage.setItem("rm_sessions", JSON.stringify([session_id, ...existing]));
@@ -171,6 +177,9 @@ export default function HomePage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="glass rounded-2xl p-4 sm:p-6 space-y-4">
+          {/* Custom Prompts */}
+          <PromptCustomizer onSelectPrompt={setCustomPrompts} />
+
           <div className="relative" onClick={e => e.stopPropagation()}>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 z-10" />
             <input
