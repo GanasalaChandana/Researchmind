@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ResearchReport } from "@/lib/types";
 import { ExternalLink, Download, Loader2, Share2, FileText, Copy, Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -11,6 +11,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
   const [citationStyle, setCitationStyle] = useState<"apa" | "mla" | "chicago">("apa");
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [citations, setCitations] = useState<{ [key: string]: string }>({});
 
   // Deduplicate sources by title (frontend safety check) and create citation mapping
   const deduplicationResult = (() => {
@@ -101,6 +102,24 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
       toast.error("Failed to create share link");
     }
   }
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    async function fetchCitations() {
+      try {
+        const response = await fetch(`/api/research/${sessionId}/citations?style=${citationStyle}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCitations(data.citations || {});
+        }
+      } catch (err) {
+        console.error("Failed to fetch citations:", err);
+      }
+    }
+
+    fetchCitations();
+  }, [citationStyle, sessionId]);
 
   return (
     <div className="space-y-8">
@@ -220,6 +239,22 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
           </motion.div>
         ))}
       </div>
+
+      {/* Formatted Citations */}
+      {Object.keys(citations).length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Formatted Bibliography ({citationStyle.toUpperCase()})
+          </h2>
+          <div className="glass rounded-xl p-6 space-y-3">
+            {Object.entries(citations).map(([id, citation]) => (
+              <div key={id} className="text-sm text-slate-300 leading-relaxed">
+                <span className="text-brand-400 font-semibold">[{id}]</span> {citation}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sources */}
       <div>
