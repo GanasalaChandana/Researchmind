@@ -332,42 +332,48 @@ async def get_citations(session_id: str, style: str = "apa"):
     try:
         session = await _get(session_id)
         if not session or not session.get("report"):
-            raise HTTPException(status_code=404, detail="Session or report not found")
+            return {"citations": {}, "style": style}
 
         report_dict = session["report"]
         if isinstance(report_dict, str):
-            report_dict = json.loads(report_dict)
+            try:
+                report_dict = json.loads(report_dict)
+            except:
+                return {"citations": {}, "style": style}
 
-        sources = report_dict.get("sources", [])
-        if not sources:
-            return {
-                "citations": {},
-                "style": style,
-            }
+        sources = report_dict.get("sources")
+        if not sources or not isinstance(sources, list):
+            return {"citations": {}, "style": style}
 
         # Build citations manually
         citations = {}
         for i, source in enumerate(sources, 1):
-            title = source.get("title", "Untitled") if isinstance(source, dict) else getattr(source, "title", "Untitled")
-            url = source.get("url", "") if isinstance(source, dict) else getattr(source, "url", "")
+            try:
+                if isinstance(source, dict):
+                    title = source.get("title", "Untitled")
+                    url = source.get("url", "")
+                else:
+                    title = getattr(source, "title", "Untitled")
+                    url = getattr(source, "url", "")
 
-            if style == "apa":
-                citations[str(i)] = f"{title}. Retrieved from {url}"
-            elif style == "mla":
-                citations[str(i)] = f'"{title}." Web. {url}'
-            elif style == "chicago":
-                citations[str(i)] = f'Accessed {url}. "{title}."'
-            else:
-                citations[str(i)] = f"[{i}] {title} - {url}"
+                if not title or not url:
+                    continue
 
-        return {
-            "citations": citations,
-            "style": style,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Citations error: {str(e)}")
+                if style == "apa":
+                    citations[str(i)] = f"{title}. Retrieved from {url}"
+                elif style == "mla":
+                    citations[str(i)] = f'"{title}." Web. {url}'
+                elif style == "chicago":
+                    citations[str(i)] = f'Accessed {url}. "{title}."'
+                else:
+                    citations[str(i)] = f"[{i}] {title} - {url}"
+            except Exception:
+                continue
+
+        return {"citations": citations, "style": style}
+    except Exception:
+        # Return empty citations on any error
+        return {"citations": {}, "style": style}
 
 
 @app.post("/research/{session_id}/share")
