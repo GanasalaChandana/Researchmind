@@ -23,7 +23,12 @@ from .tools.webhooks import (
     fire_webhook_event
 )
 from .auth.user_db import init_user_tables
-from .routes.auth import router as auth_router
+try:
+    from .routes.auth import router as auth_router
+    print("✅ Auth router imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import auth router: {e}")
+    auth_router = None
 
 
 @asynccontextmanager
@@ -50,7 +55,11 @@ app = FastAPI(
 )
 
 # Mount auth router - JWT authentication endpoints
-app.include_router(auth_router)
+if auth_router:
+    app.include_router(auth_router)
+    print("✅ Auth router mounted successfully")
+else:
+    print("⚠️  Auth router not available - routes will not work")
 
 app.add_middleware(
     CORSMiddleware,
