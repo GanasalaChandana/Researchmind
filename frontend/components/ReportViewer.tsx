@@ -1,150 +1,152 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { ResearchReport } from "@/lib/types";
-import { ExternalLink, Download, Loader2, Share2, FileText, Copy, Check } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  ExternalLink, Download, Loader2, Share2,
+  FileText, Copy, Check, BookOpen, ChevronDown
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { exportToPdf } from "@/lib/exportPdf";
 import toast from "react-hot-toast";
 
+type CitationStyle = "apa" | "mla" | "chicago";
+
+function formatCitation(source: any, index: number, style: CitationStyle): string {
+  const title = source.title || "Untitled";
+  const url = source.url || "";
+  const year = new Date().getFullYear();
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  if (style === "apa") {
+    return `[${index}] ${title}. (${year}). Retrieved from ${url}`;
+  } else if (style === "mla") {
+    return `[${index}] "${title}." Web. Accessed ${today}. <${url}>`;
+  } else {
+    // Chicago
+    return `[${index}] "${title}." Accessed ${today}. ${url}.`;
+  }
+}
+
 export default function ReportViewer({ report, sessionId }: { report: ResearchReport; sessionId?: string }) {
   const [exporting, setExporting] = useState(false);
-  const [citationStyle, setCitationStyle] = useState<"apa" | "mla" | "chicago">("apa");
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>("apa");
   const [showShare, setShowShare] = useState(false);
+  const [showCitations, setShowCitations] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [citations, setCitations] = useState<{ [key: string]: string }>({});
+  const [citationsCopied, setCitationsCopied] = useState(false);
 
-  // Deduplicate sources by title (frontend safety check) and create citation mapping
-  const deduplicationResult = (() => {
+  // Deduplicate sources by title
+  const { uniqueSources, indexMap } = useMemo(() => {
     const seen = new Map<string, number>();
-    const unique = [];
-    const indexMap: { [oldIndex: number]: number } = {}; // Maps old citation index to new
-
+    const unique: any[] = [];
+    const indexMap: { [oldIndex: number]: number } = {};
     for (let i = 0; i < (report.sources || []).length; i++) {
-      const source = report.sources[i];
-      const titleLower = (source.title || "").toLowerCase().trim();
-
-      if (titleLower && seen.has(titleLower)) {
-        // Duplicate - map to existing index
-        indexMap[i] = seen.get(titleLower)!;
+      const src = report.sources[i];
+      const key = (src.title || "").toLowerCase().trim();
+      if (key && seen.has(key)) {
+        indexMap[i] = seen.get(key)!;
       } else {
-        // New source
-        if (titleLower) {
-          seen.set(titleLower, unique.length);
-        }
+        if (key) seen.set(key, unique.length);
         indexMap[i] = unique.length;
-        unique.push(source);
+        unique.push(src);
       }
     }
-
     return { uniqueSources: unique, indexMap };
-  })();
+  }, [report.sources]);
 
-  const uniqueSources = deduplicationResult.uniqueSources;
-  const indexMap = deduplicationResult.indexMap;
+  // Build citations purely client-side — no backend call needed
+  const citations = useMemo(() => {
+    return uniqueSources.map((src, i) =>
+      formatCitation(src, i + 1, citationStyle)
+    );
+  }, [uniqueSources, citationStyle]);
 
   async function handleExport() {
     setExporting(true);
-    try {
-      await exportToPdf(report);
-    } finally {
-      setExporting(false);
-    }
+    try { await exportToPdf(report); }
+    finally { setExporting(false); }
   }
 
   async function handleExportMarkdown() {
     try {
-      const response = await fetch(`/api/research/${sessionId}/export/markdown`);
-      if (!response.ok) throw new Error("Export failed");
-      const data = await response.json();
-      const element = document.createElement("a");
-      element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(data.content));
-      element.setAttribute("download", data.filename || `research.md`);
-      element.style.display = "none";
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
+      const res = await fetch(`/api/research/${sessionId}/export/markdown`);
+      if (!res.ok) throw new Error();
+      const { content, filename } = await res.json();
+      const a = document.createElement("a");
+      a.href = "data:text/plain;charset=utf-8," + encodeURIComponent(content);
+      a.download = filename || "research.md";
+      a.click();
       toast.success("Markdown exported!");
-    } catch (err) {
-      console.error("Export error:", err);
-      toast.error("Failed to export markdown");
-    }
+    } catch { toast.error("Failed to export markdown"); }
   }
 
   async function handleExportHTML() {
     try {
-      const response = await fetch(`/api/research/${sessionId}/export/html`);
-      if (!response.ok) throw new Error("Export failed");
-      const data = await response.json();
-      const element = document.createElement("a");
-      element.setAttribute("href", "data:text/html;charset=utf-8," + encodeURIComponent(data.content));
-      element.setAttribute("download", data.filename || `research.html`);
-      element.style.display = "none";
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
+      const res = await fetch(`/api/research/${sessionId}/export/html`);
+      if (!res.ok) throw new Error();
+      const { content, filename } = await res.json();
+      const a = document.createElement("a");
+      a.href = "data:text/html;charset=utf-8," + encodeURIComponent(content);
+      a.download = filename || "research.html";
+      a.click();
       toast.success("HTML exported!");
-    } catch (err) {
-      console.error("Export error:", err);
-      toast.error("Failed to export HTML");
-    }
+    } catch { toast.error("Failed to export HTML"); }
   }
 
   async function handleShare() {
     try {
-      const response = await fetch(`/api/research/${sessionId}/share`, { method: "POST" });
-      const data = await response.json();
+      const res = await fetch(`/api/research/${sessionId}/share`, { method: "POST" });
+      const data = await res.json();
       const shareUrl = `${window.location.origin}/shared/${data.share_token}`;
       navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success("Share link copied!");
-    } catch (err) {
-      toast.error("Failed to create share link");
-    }
+    } catch { toast.error("Failed to create share link"); }
   }
 
-  // Citations feature temporarily disabled due to backend issues
-  // useEffect(() => {
-  //   if (!sessionId) return;
-  //   async function fetchCitations() { ... }
-  // }, [citationStyle, sessionId]);
+  function handleCopyAllCitations() {
+    const text = citations.join("\n\n");
+    navigator.clipboard.writeText(text);
+    setCitationsCopied(true);
+    setTimeout(() => setCitationsCopied(false), 2000);
+    toast.success("Citations copied!");
+  }
 
   return (
     <div className="space-y-8">
-      {/* Header row with export buttons */}
+      {/* Header: title + share */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl font-bold text-white">{report.topic}</h1>
+          <h1 className="text-lg sm:text-xl font-bold dark:text-white text-slate-900">{report.topic}</h1>
           <button
             onClick={() => setShowShare(!showShare)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg dark:text-slate-300 text-slate-600 hover:text-white hover:bg-brand-500/20 transition-colors"
           >
             <Share2 className="w-4 h-4" />
             <span className="text-sm">Share</span>
           </button>
         </div>
 
-        {/* Share Modal */}
+        {/* Share panel */}
         {showShare && (
-          <div className="glass rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="text"
-                readOnly
-                value={`${typeof window !== "undefined" ? window.location.origin : ""}/shared/link`}
-                className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-slate-300"
-              />
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-2 px-3 py-2 bg-brand-500 hover:bg-brand-600 rounded transition-colors text-white"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
+          <div className="glass rounded-lg p-4 flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={`${typeof window !== "undefined" ? window.location.origin : ""}/shared/link`}
+              className="flex-1 dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200 rounded px-3 py-2 text-sm dark:text-slate-300 text-slate-700"
+            />
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 px-3 py-2 bg-brand-500 hover:bg-brand-600 rounded transition-colors text-white"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
           </div>
         )}
 
-        {/* Export options */}
+        {/* Export buttons */}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleExport}
@@ -156,26 +158,23 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
           </button>
           <button
             onClick={handleExportMarkdown}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg dark:bg-slate-700 bg-slate-200 dark:hover:bg-slate-600 hover:bg-slate-300 dark:text-white text-slate-800 text-sm font-medium transition-colors"
           >
-            <FileText className="w-4 h-4" />
-            Markdown
+            <FileText className="w-4 h-4" /> Markdown
           </button>
           <button
             onClick={handleExportHTML}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg dark:bg-slate-700 bg-slate-200 dark:hover:bg-slate-600 hover:bg-slate-300 dark:text-white text-slate-800 text-sm font-medium transition-colors"
           >
-            <FileText className="w-4 h-4" />
-            HTML
+            <FileText className="w-4 h-4" /> HTML
           </button>
         </div>
-
       </div>
 
       {/* Summary */}
       <div className="glass rounded-xl p-6 border-l-4 border-brand-500">
-        <h2 className="text-lg font-semibold text-white mb-2">Executive Summary</h2>
-        <p className="text-slate-300 leading-relaxed">{report.summary}</p>
+        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-2">Executive Summary</h2>
+        <p className="dark:text-slate-300 text-slate-700 leading-relaxed">{report.summary}</p>
       </div>
 
       {/* Sections */}
@@ -188,8 +187,8 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
             transition={{ delay: i * 0.08 }}
             className="glass rounded-xl p-6"
           >
-            <h3 className="text-base font-semibold text-white mb-3">{section.heading}</h3>
-            <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">{section.content}</p>
+            <h3 className="text-base font-semibold dark:text-white text-slate-900 mb-3">{section.heading}</h3>
+            <p className="dark:text-slate-300 text-slate-700 leading-relaxed text-sm whitespace-pre-wrap">{section.content}</p>
             {section.citations?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {section.citations.map((c) => {
@@ -213,9 +212,71 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
         ))}
       </div>
 
+      {/* ── Citations ── */}
+      <div className="glass rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowCitations(v => !v)}
+          className="w-full flex items-center justify-between px-6 py-4 dark:hover:bg-white/5 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-brand-400" />
+            <span className="text-sm font-semibold dark:text-white text-slate-900">
+              Citations ({uniqueSources.length})
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Style selector */}
+            <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+              {(["apa", "mla", "chicago"] as CitationStyle[]).map((style) => (
+                <button
+                  key={style}
+                  onClick={() => setCitationStyle(style)}
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium uppercase transition-colors ${
+                    citationStyle === style
+                      ? "bg-brand-500 text-white"
+                      : "dark:text-slate-400 text-slate-500 dark:hover:text-white hover:text-slate-900"
+                  }`}
+                >
+                  {style}
+                </button>
+              ))}
+            </div>
+            <ChevronDown className={`w-4 h-4 dark:text-slate-400 text-slate-500 transition-transform ${showCitations ? "rotate-180" : ""}`} />
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {showCitations && (
+            <motion.div
+              initial={{ height: 0 }}
+              animate={{ height: "auto" }}
+              exit={{ height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-6 pb-6 space-y-3 border-t dark:border-white/10 border-slate-200 pt-4">
+                {/* Copy all */}
+                <button
+                  onClick={handleCopyAllCitations}
+                  className="flex items-center gap-2 text-xs dark:text-slate-400 text-slate-500 hover:text-brand-400 transition-colors"
+                >
+                  {citationsCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {citationsCopied ? "Copied!" : "Copy all citations"}
+                </button>
+
+                {citations.map((cite, i) => (
+                  <div key={i} className="dark:bg-white/5 bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs dark:text-slate-300 text-slate-700 leading-relaxed font-mono">{cite}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Sources */}
       <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Sources ({uniqueSources.length})</h2>
+        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-4">Sources ({uniqueSources.length})</h2>
         <div className="space-y-3">
           {uniqueSources.map((source, i) => (
             <div key={i} className="glass rounded-lg p-4 flex gap-4">
@@ -229,7 +290,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
                 >
                   {source.title || source.url}
                 </a>
-                <p className="text-xs text-slate-400 mt-1 line-clamp-2">{source.summary}</p>
+                <p className="text-xs dark:text-slate-400 text-slate-500 mt-1 line-clamp-2">{source.summary}</p>
               </div>
             </div>
           ))}

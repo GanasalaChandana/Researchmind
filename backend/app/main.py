@@ -17,6 +17,10 @@ from .agents.synthesizer import synthesize
 from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
+from .tools.webhooks import (
+    register_webhook, list_webhooks, delete_webhook,
+    fire_webhook_event
+)
 
 
 @asynccontextmanager
@@ -243,11 +247,22 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                     # Cache the completed research for future queries
                     await cache_research(topic, report_dict)
 
+                    # 🔔 Fire webhook: research completed
+                    asyncio.create_task(fire_webhook_event(
+                        session_id, "completed",
+                        {"topic": topic, "session_id": session_id, "summary": report_dict.get("summary", "")[:500]}
+                    ))
+
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
         except Exception as e:
             await _update(session_id, "failed")
+            # 🔔 Fire webhook: research failed
+            asyncio.create_task(fire_webhook_event(
+                session_id, "failed",
+                {"topic": topic, "session_id": session_id, "error": str(e)}
+            ))
             error_event = AgentEvent(type="error", agent="system", message=friendly_error(e))
             yield {"data": error_event.model_dump_json()}
 
@@ -406,6 +421,83 @@ async def create_share_link(session_id: str):
         "expires_in": "30 days",
     }
 
+
+
+# ─── Webhook Endpoints ───────────────────────────────────────────────────────
+
+class WebhookRequest(BaseModel):
+    url: str
+    events: list = ["completed", "failed"]
+    secret: str = None
+
+from pydantic import BaseModel as _Base
+class WebhookRequest(_Base):
+    url: str
+    events: list[str] = ["completed", "failed"]
+    secret: str = None
+
+
+@app.post("/research/{session_id}/webhooks")
+async def add_webhook(session_id: str, req: WebhookRequest):
+    """Register a webhook URL to be notified when research completes or fails.
+
+    Events: 'completed', 'failed', 'progress'
+
+    The webhook URL will receive a POST request with this body:
+    ```json
+    {
+      "event": "completed",
+      "session_id": "...",
+      "timestamp": "...",
+      "delivery_id": "...",
+      "data": { "topic": "...", "summary": "..." }
+    }
+    ```
+
+    If you provide a `secret`, each request will include an
+    `X-ResearchMind-Signature: sha256=<hmac>` header for verification.
+    """
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    webhook = await register_webhook(
+        session_id=session_id,
+        url=req.url,
+        events=req.events,
+        secret=req.secret,
+    )
+    return {"status": "registered", "webhook": webhook}
+
+
+@app.get("/research/{session_id}/webhooks")
+async def get_webhooks(session_id: str):
+    """List all registered webhooks for a session"""
+    webhooks = await list_webhooks(session_id)
+    return {"webhooks": webhooks, "count": len(webhooks)}
+
+
+@app.delete("/research/{session_id}/webhooks/{webhook_id}")
+async def remove_webhook(session_id: str, webhook_id: str):
+    """Delete a webhook registration"""
+    deleted = await delete_webhook(session_id, webhook_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return {"status": "deleted", "webhook_id": webhook_id}
+
+
+@app.post("/research/{session_id}/webhooks/test")
+async def test_webhook(session_id: str):
+    """Send a test webhook event to all registered URLs for a session"""
+    await fire_webhook_event(
+        session_id, "test",
+        {"message": "This is a test webhook from ResearchMind", "session_id": session_id}
+    )
+    webhooks = await list_webhooks(session_id)
+    return {"status": "fired", "webhooks_notified": len(webhooks)}
+
+
+# ─── Shared Research ─────────────────────────────────────────────────────────
 
 @app.get("/shared/{share_token}")
 async def get_shared_research(share_token: str):

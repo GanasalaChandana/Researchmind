@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, ChevronRight, Clock,
   CheckCircle2, XCircle, Loader2, Filter,
-  Trash2, RefreshCw, MoreHorizontal, GitCompare
+  Trash2, RefreshCw, MoreHorizontal, GitCompare,
+  SortAsc, SortDesc, Calendar, Tag, X
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -40,6 +41,8 @@ export default function HomePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [daysFilter, setDaysFilter] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [customPrompts, setCustomPrompts] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -76,21 +79,31 @@ export default function HomePage() {
   }, [topic, sessions]);
 
   const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
+    let result = sessions.filter((s) => {
       const matchTopic = s.topic.toLowerCase().includes(historySearch.toLowerCase());
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
-
-      // Date filter
       let matchDate = true;
       if (daysFilter) {
-        const createdDate = new Date(s.created_at);
-        const cutoffDate = new Date(Date.now() - daysFilter * 24 * 60 * 60 * 1000);
-        matchDate = createdDate > cutoffDate;
+        const cutoff = new Date(Date.now() - daysFilter * 24 * 60 * 60 * 1000);
+        matchDate = new Date(s.created_at) > cutoff;
       }
-
       return matchTopic && matchStatus && matchDate;
     });
-  }, [sessions, historySearch, statusFilter, daysFilter]);
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortOrder === "newest" ? -diff : diff;
+    });
+
+    return result;
+  }, [sessions, historySearch, statusFilter, daysFilter, sortOrder]);
+
+  const activeFilterCount = [
+    statusFilter !== "all",
+    daysFilter !== null,
+    historySearch.trim() !== "",
+  ].filter(Boolean).length;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -272,54 +285,137 @@ export default function HomePage() {
             transition={{ delay: 0.2 }}
             className="mt-10"
           >
-            {/* History header + search + filter */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-              <div className="flex items-center gap-2 shrink-0">
+            {/* History header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-500" />
                 <h2 className="text-sm font-medium dark:text-slate-400 text-slate-700">
                   Recent Research
-                  <span className="ml-2 text-xs dark:text-slate-600 text-slate-500">({sessions.length})</span>
                 </h2>
+                <span className="text-xs dark:bg-white/10 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full">
+                  {filteredSessions.length}/{sessions.length}
+                </span>
               </div>
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                <input
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                  placeholder="Search past research..."
-                  className="w-full dark:bg-white/5 bg-slate-100 dark:border-white/10 border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50 transition-colors"
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                {(["all", "completed", "failed"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setStatusFilter(f)}
-                    className={`text-xs px-2.5 py-1 rounded-full transition-colors capitalize ${
-                      statusFilter === f ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-
-              {/* Date range filter */}
-              <div className="flex items-center gap-1 flex-wrap">
-                {([7, 30, 90, null] as const).map((days) => (
-                  <button
-                    key={days ?? "all"}
-                    onClick={() => setDaysFilter(days)}
-                    className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-                      daysFilter === days ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
-                    }`}
-                  >
-                    {days ? `${days}d` : "All"}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {/* Sort toggle */}
+                <button
+                  onClick={() => setSortOrder(o => o === "newest" ? "oldest" : "newest")}
+                  className="flex items-center gap-1 text-xs dark:text-slate-400 text-slate-600 hover:text-brand-500 transition-colors"
+                  title={`Sort: ${sortOrder}`}
+                >
+                  {sortOrder === "newest"
+                    ? <SortDesc className="w-3.5 h-3.5" />
+                    : <SortAsc className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">{sortOrder === "newest" ? "Newest" : "Oldest"}</span>
+                </button>
+                {/* Advanced filters toggle */}
+                <button
+                  onClick={() => setShowAdvanced(v => !v)}
+                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors ${
+                    showAdvanced || activeFilterCount > 0
+                      ? "bg-brand-500 text-white"
+                      : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                  }`}
+                >
+                  <Filter className="w-3 h-3" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 bg-white/30 text-white text-[10px] px-1.5 rounded-full font-bold">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
+
+            {/* Search bar — always visible */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+              <input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search past research..."
+                className="w-full dark:bg-white/5 bg-slate-100 dark:border-white/10 border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50 transition-colors"
+              />
+              {historySearch && (
+                <button
+                  onClick={() => setHistorySearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Advanced filter panel */}
+            <AnimatePresence>
+              {showAdvanced && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden mb-3"
+                >
+                  <div className="glass rounded-xl p-3 space-y-3">
+                    {/* Status filter */}
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Tag className="w-3 h-3 text-slate-500" />
+                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Status</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {(["all", "completed", "failed"] as const).map((f) => (
+                          <button
+                            key={f}
+                            onClick={() => setStatusFilter(f)}
+                            className={`text-xs px-3 py-1 rounded-full transition-colors capitalize ${
+                              statusFilter === f
+                                ? f === "completed" ? "bg-emerald-500 text-white"
+                                  : f === "failed" ? "bg-red-500 text-white"
+                                  : "bg-brand-500 text-white"
+                                : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                            }`}
+                          >
+                            {f === "completed" && "✓ "}
+                            {f === "failed" && "✗ "}
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Date filter */}
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Calendar className="w-3 h-3 text-slate-500" />
+                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Date Range</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {([7, 30, 90, null] as const).map((days) => (
+                          <button
+                            key={days ?? "all"}
+                            onClick={() => setDaysFilter(days)}
+                            className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                              daysFilter === days ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                            }`}
+                          >
+                            {days ? `Last ${days}d` : "All Time"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Reset */}
+                    {activeFilterCount > 0 && (
+                      <button
+                        onClick={() => { setStatusFilter("all"); setDaysFilter(null); setHistorySearch(""); }}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        ✕ Clear all filters
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Session list */}
             <div className="space-y-2">
