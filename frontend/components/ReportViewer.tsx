@@ -53,16 +53,18 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
   async function handleExportMarkdown() {
     try {
       const response = await fetch(`/api/research/${sessionId}/export/markdown`);
+      if (!response.ok) throw new Error("Export failed");
       const data = await response.json();
       const element = document.createElement("a");
       element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(data.content));
-      element.setAttribute("download", data.filename);
+      element.setAttribute("download", data.filename || `research.md`);
       element.style.display = "none";
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
       toast.success("Markdown exported!");
     } catch (err) {
+      console.error("Export error:", err);
       toast.error("Failed to export markdown");
     }
   }
@@ -70,16 +72,18 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
   async function handleExportHTML() {
     try {
       const response = await fetch(`/api/research/${sessionId}/export/html`);
+      if (!response.ok) throw new Error("Export failed");
       const data = await response.json();
       const element = document.createElement("a");
       element.setAttribute("href", "data:text/html;charset=utf-8," + encodeURIComponent(data.content));
-      element.setAttribute("download", data.filename);
+      element.setAttribute("download", data.filename || `research.html`);
       element.style.display = "none";
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
       toast.success("HTML exported!");
     } catch (err) {
+      console.error("Export error:", err);
       toast.error("Failed to export HTML");
     }
   }
