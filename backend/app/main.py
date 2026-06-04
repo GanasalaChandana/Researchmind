@@ -244,34 +244,86 @@ async def stream_research(session_id: str, topic: str, depth: int = 3):
 @app.get("/research/{session_id}/export/{format_type}")
 async def export_research(session_id: str, format_type: str):
     """Export research report in different formats"""
-    session = await _get(session_id)
-    if not session or not session.get("report"):
-        raise HTTPException(status_code=404, detail="Session or report not found")
+    try:
+        session = await _get(session_id)
+        if not session or not session.get("report"):
+            raise HTTPException(status_code=404, detail="Session or report not found")
 
-    report_dict = session["report"]
-    if isinstance(report_dict, str):
-        report_dict = json.loads(report_dict)
+        report_dict = session["report"]
+        if isinstance(report_dict, str):
+            report_dict = json.loads(report_dict)
 
-    # Reconstruct ResearchReport object from dict
-    from .models.schemas import ResearchReport, Source, Section
-    report = ResearchReport(**report_dict)
+        topic = report_dict.get("topic", "Research Report")
+        summary = report_dict.get("summary", "")
+        sections = report_dict.get("sections", [])
+        sources = report_dict.get("sources", [])
 
-    if format_type == "markdown":
-        content = export_markdown(report)
-        return {
-            "content": content,
-            "filename": f"{session_id}.md",
-            "mime_type": "text/markdown",
-        }
-    elif format_type == "html":
-        content = export_html(report)
-        return {
-            "content": content,
-            "filename": f"{session_id}.html",
-            "mime_type": "text/html",
-        }
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported format")
+        if format_type == "markdown":
+            # Build markdown manually from dict
+            lines = [
+                f"# {topic}\n",
+                f"*Research ID: {session_id}*\n",
+                f"## Executive Summary\n{summary}\n",
+            ]
+
+            for section in sections:
+                lines.append(f"## {section.get('heading', '')}\n")
+                lines.append(section.get("content", "") + "\n")
+
+            lines.append("\n## Sources\n")
+            for i, source in enumerate(sources, 1):
+                lines.append(f"[{i}] **{source.get('title', 'Untitled')}**\n")
+                lines.append(f"{source.get('url', '')}\n")
+                lines.append(f"{source.get('summary', '')}\n\n")
+
+            content = "".join(lines)
+            return {
+                "content": content,
+                "filename": f"{session_id}.md",
+                "mime_type": "text/markdown",
+            }
+        elif format_type == "html":
+            # Build HTML manually from dict
+            html_parts = [
+                "<!DOCTYPE html>",
+                "<html><head><meta charset='UTF-8'>",
+                f"<title>{topic}</title>",
+                "<style>body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }",
+                "h1 { border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }",
+                "h2 { color: #1e40af; margin-top: 20px; }",
+                ".source { background: #f0f9ff; padding: 10px; margin: 10px 0; border-radius: 5px; }</style>",
+                "</head><body>",
+                f"<h1>{topic}</h1>",
+                f"<p><em>Research ID: {session_id}</em></p>",
+                f"<h2>Executive Summary</h2><p>{summary}</p>",
+            ]
+
+            for section in sections:
+                html_parts.append(f"<h2>{section.get('heading', '')}</h2>")
+                html_parts.append(f"<p>{section.get('content', '').replace(chr(10), '<br>')}</p>")
+
+            html_parts.append("<h2>Sources</h2>")
+            for i, source in enumerate(sources, 1):
+                html_parts.append(f'<div class="source">')
+                html_parts.append(f"<strong>[{i}] {source.get('title', 'Untitled')}</strong><br>")
+                html_parts.append(f'<a href="{source.get("url", "")}" target="_blank">{source.get("url", "")}</a><br>')
+                html_parts.append(f"<p>{source.get('summary', '')}</p>")
+                html_parts.append("</div>")
+
+            html_parts.extend(["</body></html>"])
+
+            content = "\n".join(html_parts)
+            return {
+                "content": content,
+                "filename": f"{session_id}.html",
+                "mime_type": "text/html",
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
 
 
 @app.get("/research/{session_id}/citations")
