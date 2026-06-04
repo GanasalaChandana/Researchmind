@@ -171,8 +171,8 @@ export default function HomePage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 mb-4">
             <Sparkles className="w-7 h-7 text-brand-500" />
           </div>
-          <h1 className="text-4xl font-bold text-white dark:text-white mb-2">ResearchMind</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
+          <h1 className="text-4xl font-bold dark:text-white text-slate-900 mb-2">ResearchMind</h1>
+          <p className="dark:text-slate-400 text-slate-600 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
         </div>
 
         {/* Form */}
@@ -188,7 +188,7 @@ export default function HomePage() {
               onChange={(e) => setTopic(e.target.value)}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               placeholder="What do you want to research?"
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 sm:py-4 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors text-base sm:text-lg"
+              className="w-full dark:bg-white/5 bg-slate-50 dark:border-white/10 border-slate-200 rounded-xl pl-12 pr-4 py-3 sm:py-4 dark:text-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 transition-colors text-base sm:text-lg"
               autoFocus
               autoComplete="off"
             />
@@ -256,7 +256,7 @@ export default function HomePage() {
               <button
                 key={t}
                 onClick={() => setTopic(t)}
-                className="text-xs glass px-3 py-1.5 rounded-full text-slate-300 hover:text-white hover:border-brand-500/50 transition-colors"
+                className="text-xs glass px-3 py-1.5 rounded-full dark:text-slate-300 text-slate-600 hover:text-brand-500 hover:border-brand-500/50 transition-colors"
               >
                 {t}
               </button>
@@ -276,9 +276,9 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
               <div className="flex items-center gap-2 shrink-0">
                 <Clock className="w-4 h-4 text-slate-500" />
-                <h2 className="text-sm font-medium text-slate-400">
+                <h2 className="text-sm font-medium dark:text-slate-400 text-slate-700">
                   Recent Research
-                  <span className="ml-2 text-xs text-slate-600">({sessions.length})</span>
+                  <span className="ml-2 text-xs dark:text-slate-600 text-slate-500">({sessions.length})</span>
                 </h2>
               </div>
               <div className="relative flex-1">
@@ -287,7 +287,7 @@ export default function HomePage() {
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
                   placeholder="Search past research..."
-                  className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500/50 transition-colors"
+                  className="w-full dark:bg-white/5 bg-slate-100 dark:border-white/10 border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50 transition-colors"
                 />
               </div>
               <div className="flex items-center gap-1">
@@ -297,7 +297,7 @@ export default function HomePage() {
                     key={f}
                     onClick={() => setStatusFilter(f)}
                     className={`text-xs px-2.5 py-1 rounded-full transition-colors capitalize ${
-                      statusFilter === f ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
+                      statusFilter === f ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
                     }`}
                   >
                     {f}
@@ -312,7 +312,7 @@ export default function HomePage() {
                     key={days ?? "all"}
                     onClick={() => setDaysFilter(days)}
                     className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-                      daysFilter === days ? "bg-brand-500 text-white" : "text-slate-400 hover:text-slate-200 glass"
+                      daysFilter === days ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
                     }`}
                   >
                     {days ? `${days}d` : "All"}
@@ -348,8 +348,8 @@ export default function HomePage() {
                       >
                         <StatusIcon status={s.status} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-white truncate">{s.topic}</p>
-                          <p className="text-xs text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
+                          <p className="text-sm dark:text-white text-slate-800 truncate">{s.topic}</p>
+                          <p className="text-xs dark:text-slate-500 text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
                       </button>

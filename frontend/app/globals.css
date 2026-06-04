@@ -38,21 +38,47 @@ button { min-height: 36px; }
 /* Smooth scrolling */
 * { scroll-behavior: smooth; }
 
+/* ─── Glass card ─── */
 .glass {
-  background: rgba(26, 29, 46, 0.8);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
 }
-
 :root.dark .glass {
-  background: rgba(26, 29, 46, 0.8);
-  border: 1px solid #2a2d3e;
+  background: rgba(26, 29, 46, 0.85);
+  border-color: #2a2d3e;
+}
+:root:not(.dark) .glass {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.06);
 }
 
-:root:not(.dark) .glass {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid #e2e8f0;
+/* ─── Light-mode text overrides ─── */
+/* Any element with text-white becomes dark in light mode */
+:root:not(.dark) .text-white  { color: #0f172a !important; }
+:root:not(.dark) .text-slate-400 { color: #475569 !important; }
+:root:not(.dark) .text-slate-300 { color: #334155 !important; }
+:root:not(.dark) .text-slate-500 { color: #64748b !important; }
+
+/* Input fields in light mode */
+:root:not(.dark) input,
+:root:not(.dark) textarea {
+  color: #0f172a;
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
+:root:not(.dark) input::placeholder,
+:root:not(.dark) textarea::placeholder { color: #94a3b8; }
+:root:not(.dark) input:focus,
+:root:not(.dark) textarea:focus { border-color: #4f6ef7; background: #fff; }
+
+/* bg-white/5 — invisible in light mode, give it a real background */
+:root:not(.dark) .bg-white\/5  { background: #f1f5f9 !important; }
+:root:not(.dark) .bg-white\/10 { background: #e2e8f0 !important; }
+
+/* Borders */
+:root:not(.dark) .border-white\/10 { border-color: #cbd5e1 !important; }
+:root:not(.dark) .border-white\/20 { border-color: #94a3b8 !important; }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
