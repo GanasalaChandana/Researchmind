@@ -30,6 +30,14 @@ except Exception as e:
     print(f"❌ Failed to import auth router: {e}")
     auth_router = None
 
+# Test router to verify router registration works
+try:
+    from .routes.auth_test import router as test_router
+    print("✅ Test router imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import test router: {e}")
+    test_router = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,6 +68,13 @@ if auth_router:
     print("✅ Auth router mounted successfully")
 else:
     print("⚠️  Auth router not available - routes will not work")
+
+# Mount test router for debugging
+if test_router:
+    app.include_router(test_router)
+    print("✅ Test router mounted successfully")
+else:
+    print("⚠️  Test router not available")
 
 app.add_middleware(
     CORSMiddleware,
