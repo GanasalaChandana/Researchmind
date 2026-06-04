@@ -329,19 +329,45 @@ async def export_research(session_id: str, format_type: str):
 @app.get("/research/{session_id}/citations")
 async def get_citations(session_id: str, style: str = "apa"):
     """Get formatted citations for research"""
-    session = await _get(session_id)
-    if not session or not session.get("report"):
-        raise HTTPException(status_code=404, detail="Session or report not found")
+    try:
+        session = await _get(session_id)
+        if not session or not session.get("report"):
+            raise HTTPException(status_code=404, detail="Session or report not found")
 
-    report_dict = session["report"]
-    if isinstance(report_dict, str):
-        report_dict = json.loads(report_dict)
+        report_dict = session["report"]
+        if isinstance(report_dict, str):
+            report_dict = json.loads(report_dict)
 
-    sources = report_dict.get("sources", [])
-    return {
-        "citations": format_citations(style, sources),
-        "style": style,
-    }
+        sources = report_dict.get("sources", [])
+        if not sources:
+            return {
+                "citations": {},
+                "style": style,
+            }
+
+        # Build citations manually
+        citations = {}
+        for i, source in enumerate(sources, 1):
+            title = source.get("title", "Untitled") if isinstance(source, dict) else getattr(source, "title", "Untitled")
+            url = source.get("url", "") if isinstance(source, dict) else getattr(source, "url", "")
+
+            if style == "apa":
+                citations[str(i)] = f"{title}. Retrieved from {url}"
+            elif style == "mla":
+                citations[str(i)] = f'"{title}." Web. {url}'
+            elif style == "chicago":
+                citations[str(i)] = f'Accessed {url}. "{title}."'
+            else:
+                citations[str(i)] = f"[{i}] {title} - {url}"
+
+        return {
+            "citations": citations,
+            "style": style,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Citations error: {str(e)}")
 
 
 @app.post("/research/{session_id}/share")
