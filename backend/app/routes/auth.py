@@ -1,6 +1,6 @@
 """Auth routes: register, login, refresh, logout, me, update profile, change password"""
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 
 # Import models
 from ..models.user import (
@@ -33,6 +33,9 @@ from ..auth.user_db import (
 # Email delivery
 from ..tools.email import email_configured, send_password_reset_email
 
+# Rate limiting
+from ..tools.rate_limit import check_rate_limit, clear_rate_limit
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -54,8 +57,11 @@ def _user_out(user: dict, research_count: int = 0) -> UserOut:
 # ── Register ──────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: UserRegister):
+async def register(body: UserRegister, request: Request):
     """Create a new user account and return JWT tokens"""
+    # Anti-spam: max 10 signups per IP per hour
+    check_rate_limit(request, bucket="register", max_attempts=10, window_seconds=3600)
+
     # Check for duplicate email
     existing = await get_user_by_email(body.email)
     if existing:
@@ -91,8 +97,13 @@ async def register(body: UserRegister):
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: UserLogin):
+async def login(body: UserLogin, request: Request):
     """Login with email and password"""
+    # Brute-force protection: max 5 failed attempts per IP+email per 15 minutes
+    check_rate_limit(
+        request, bucket="login", max_attempts=5, window_seconds=900, extra_key=body.email
+    )
+
     user = await get_user_by_email(body.email)
 
     if not user or not verify_password(body.password, user["password"]):
@@ -100,6 +111,9 @@ async def login(body: UserLogin):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+
+    # Successful login — clear the attempt counter for this IP+email
+    clear_rate_limit(request, bucket="login", extra_key=body.email)
 
     access_token = create_access_token(user["id"], user["email"])
     refresh_token = create_refresh_token(user["id"])
@@ -242,7 +256,7 @@ async def delete_account(current_user: dict = Depends(get_current_user)):
 # ── Forgot Password ───────────────────────────────────────────────────────────
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPassword):
+async def forgot_password(body: ForgotPassword, request: Request):
     """
     Request a password reset. Generates a single-use reset token (valid 30 min).
 
@@ -251,6 +265,9 @@ async def forgot_password(body: ForgotPassword):
     code is emailed and NOT returned in the response. If not configured, the token
     is returned directly as a development fallback.
     """
+    # Anti-abuse: max 5 reset requests per IP per 15 minutes
+    check_rate_limit(request, bucket="forgot", max_attempts=5, window_seconds=900)
+
     user = await get_user_by_email(body.email)
 
     # Generic response regardless of whether the user exists (security best practice)

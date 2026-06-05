@@ -116,7 +116,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.2.0-email-reset"}
+    return {"status": "ok", "version": "3.3.0-rate-limit"}
 
 
 @app.post("/research/start")
