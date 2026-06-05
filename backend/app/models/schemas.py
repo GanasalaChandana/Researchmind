@@ -70,3 +70,9 @@ class ResearchSession(BaseModel):
     status: str  # "running" | "completed" | "failed"
     created_at: str
     report: Optional[ResearchReport] = None
+
+
+class WebhookRequest(BaseModel):
+    url: str
+    events: list[str] = ["completed", "failed"]
+    secret: Optional[str] = None
