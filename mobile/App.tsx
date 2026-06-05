@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -29,9 +28,9 @@ function AppContent() {
 
   if (!isAuthenticated && !skipAuth) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 50 }}>
         <LoginScreen />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -57,7 +56,7 @@ function AppContent() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 50 }}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -92,19 +91,17 @@ function AppContent() {
           );
         })}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
