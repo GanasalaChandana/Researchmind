@@ -4,7 +4,7 @@
     "slug": "researchmind-mobile",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "researchmind",
