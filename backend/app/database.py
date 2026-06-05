@@ -88,12 +88,17 @@ async def list_sessions(
     status: str = None,
     search_query: str = None,
     days_back: int = None,
+    user_id: str = None,
 ) -> list[dict]:
-    """List sessions with optional filtering"""
+    """List sessions with optional filtering, scoped to user if user_id provided"""
     pool = await get_pool()
     async with pool.acquire() as conn:
         query = "SELECT * FROM sessions WHERE 1=1"
         params = []
+
+        if user_id:
+            query += " AND user_id = $" + str(len(params) + 1)
+            params.append(user_id)
 
         if status:
             query += " AND status = $" + str(len(params) + 1)

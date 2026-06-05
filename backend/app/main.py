@@ -98,11 +98,14 @@ async def _get(session_id: str):
     return _mem.get(session_id)
 
 
-async def _list():
+async def _list(user_id: str = None):
     try:
-        return await list_sessions()
+        return await list_sessions(user_id=user_id)
     except Exception:
-        return sorted(_mem.values(), key=lambda s: s["created_at"], reverse=True)[:20]
+        sessions = list(_mem.values())
+        if user_id:
+            sessions = [s for s in sessions if s.get("user_id") == user_id]
+        return sorted(sessions, key=lambda s: s["created_at"], reverse=True)[:20]
 
 
 @app.options("/{rest_of_path:path}")
@@ -136,11 +139,8 @@ async def get_sessions(
     current_user: dict = Depends(get_optional_user),
 ):
     """List sessions — filters to current user's sessions if authenticated"""
-    sessions = await _list()
-
-    # Server-side user isolation: only return sessions owned by this user
-    if current_user:
-        sessions = [s for s in sessions if s.get("user_id") == current_user["id"]]
+    user_id = current_user["id"] if current_user else None
+    sessions = await _list(user_id=user_id)
 
     # Apply additional filters
     filtered = sessions
