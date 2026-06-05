@@ -53,19 +53,26 @@ export default function HomePage() {
   const { user, signOut, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    // Only load sessions started in this browser session
+    const token = localStorage.getItem("rm_access_token");
     const localIds: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
-    if (localIds.length === 0) return;
 
-    fetch("/api/research/sessions")
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    fetch("/api/research/sessions", { headers })
       .then((r) => r.json())
       .then((data: SessionSummary[]) => {
-        // Filter to only show sessions this user started
-        const mine = data.filter((s) => localIds.includes(s.id));
-        setSessions(mine);
+        if (token) {
+          // Authenticated: server already filtered to this user's sessions
+          setSessions(data);
+        } else {
+          // Unauthenticated: filter by localStorage IDs
+          const mine = data.filter((s) => localIds.includes(s.id));
+          setSessions(mine);
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [isAuthenticated]);
 
   // Topic suggestions from history
   useEffect(() => {

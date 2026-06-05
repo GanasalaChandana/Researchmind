@@ -5,7 +5,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at startup
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from .models.schemas import ResearchRequest, AgentEvent, WebhookRequest
@@ -22,6 +22,8 @@ from .tools.webhooks import (
 )
 from .auth.user_db import init_user_tables
 from .routes.auth import router as auth_router
+from .routes.public_api import router as public_api_router
+from .auth.dependencies import get_optional_user
 
 
 @asynccontextmanager
@@ -47,8 +49,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Mount auth router
+# Mount routers
 app.include_router(auth_router)
+app.include_router(public_api_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,9 +66,10 @@ app.add_middleware(
 _mem: dict[str, dict] = {}
 
 
-async def _create(session_id: str, topic: str):
+async def _create(session_id: str, topic: str, user_id: str = None):
     data = {"id": session_id, "topic": topic, "status": "running",
-            "created_at": datetime.utcnow().isoformat(), "report": None}
+            "created_at": datetime.utcnow().isoformat(), "report": None,
+            "user_id": user_id}
     _mem[session_id] = data
     try:
         await create_session(session_id, topic)
@@ -113,9 +117,13 @@ async def health():
 
 
 @app.post("/research/start")
-async def start_research(request: ResearchRequest):
+async def start_research(
+    request: ResearchRequest,
+    current_user: dict = Depends(get_optional_user),
+):
     session_id = str(uuid.uuid4())
-    await _create(session_id, request.topic)
+    user_id = current_user["id"] if current_user else None
+    await _create(session_id, request.topic, user_id=user_id)
     return {"session_id": session_id}
 
 
@@ -125,11 +133,16 @@ async def get_sessions(
     search: str = None,
     days: int = None,
     limit: int = 20,
+    current_user: dict = Depends(get_optional_user),
 ):
-    """List sessions with optional filters"""
+    """List sessions — filters to current user's sessions if authenticated"""
     sessions = await _list()
 
-    # Apply filters in-memory as fallback
+    # Server-side user isolation: only return sessions owned by this user
+    if current_user:
+        sessions = [s for s in sessions if s.get("user_id") == current_user["id"]]
+
+    # Apply additional filters
     filtered = sessions
     if status:
         filtered = [s for s in filtered if s.get("status") == status]

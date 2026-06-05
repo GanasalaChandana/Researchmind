@@ -10,9 +10,13 @@ export async function startResearch(
   if (customPrompts && customPrompts.length > 0) {
     payload.custom_prompts = customPrompts;
   }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(`/api/research/start`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("Failed to start research session");
