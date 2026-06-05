@@ -23,20 +23,7 @@ from .tools.webhooks import (
     fire_webhook_event
 )
 from .auth.user_db import init_user_tables
-try:
-    from .routes.auth import router as auth_router
-    print("✅ Auth router imported successfully")
-except Exception as e:
-    print(f"❌ Failed to import auth router: {e}")
-    auth_router = None
-
-# Test router to verify router registration works
-try:
-    from .routes.auth_test import router as test_router
-    print("✅ Test router imported successfully")
-except Exception as e:
-    print(f"❌ Failed to import test router: {e}")
-    test_router = None
+from .routes.auth import router as auth_router
 
 
 @asynccontextmanager
@@ -62,19 +49,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Mount auth router - JWT authentication endpoints
-if auth_router:
-    app.include_router(auth_router)
-    print("✅ Auth router mounted successfully")
-else:
-    print("⚠️  Auth router not available - routes will not work")
-
-# Mount test router for debugging
-if test_router:
-    app.include_router(test_router)
-    print("✅ Test router mounted successfully")
-else:
-    print("⚠️  Test router not available")
+# Mount auth router
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -135,16 +111,6 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/debug/routers")
-async def debug_routers():
-    """Debug endpoint to check router status"""
-    return {
-        "auth_router_loaded": auth_router is not None,
-        "test_router_loaded": test_router is not None,
-        "message": "Check logs for import messages"
-    }
 
 
 @app.post("/research/start")
