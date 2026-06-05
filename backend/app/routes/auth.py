@@ -49,19 +49,25 @@ def _user_out(user: dict, research_count: int = 0) -> UserOut:
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: UserRegister):
     """Create a new user account and return JWT tokens"""
-    # Check for duplicate email
-    existing = await get_user_by_email(body.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists",
-        )
+    import traceback
+    try:
+        # Check for duplicate email
+        existing = await get_user_by_email(body.email)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists",
+            )
 
-    # Create user
-    hashed = hash_password(body.password)
-    user = await create_user(body.email, body.name, hashed)
-    if not user:
-        raise HTTPException(status_code=500, detail="Failed to create user")
+        # Create user
+        hashed = hash_password(body.password)
+        user = await create_user(body.email, body.name, hashed)
+        if not user:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Register error: {type(e).__name__}: {str(e)}")
 
     # Create tokens
     access_token = create_access_token(user["id"], user["email"])
