@@ -8,8 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-export default function LoginScreen({ navigation }: any) {
-  const { login } = useAuth();
+export default function LoginScreen() {
+  const { login, register, continueAsGuest } = useAuth();
   const { colors } = useTheme();
   const s = makeStyles(colors);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -18,7 +18,6 @@ export default function LoginScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -150,9 +149,8 @@ export default function LoginScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Skip auth */}
-        <TouchableOpacity onPress={() => navigation.navigate('Main')} style={s.skipBtn}>
-          <Text style={s.skipText}>Continue without account</Text>
+        <TouchableOpacity onPress={continueAsGuest} style={s.skipBtn}>
+          <Text style={s.skipText}>Continue without account →</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

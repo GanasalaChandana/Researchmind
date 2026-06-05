@@ -17,9 +17,11 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
+  skipAuth: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  continueAsGuest: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,18 +43,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [skipAuth, setSkipAuth] = useState(false);
 
   useEffect(() => {
-    // Restore session from AsyncStorage
     (async () => {
       try {
-        const [savedToken, savedUser] = await Promise.all([
+        const [savedToken, savedUser, guestMode] = await Promise.all([
           AsyncStorage.getItem('rm_token'),
           AsyncStorage.getItem('rm_user'),
+          AsyncStorage.getItem('rm_guest'),
         ]);
         if (savedToken && savedUser) {
           setToken(savedToken);
           setUser(JSON.parse(savedUser));
+        } else if (guestMode === 'true') {
+          setSkipAuth(true);
         }
       } catch {}
       setLoading(false);
@@ -84,16 +89,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await authFetch('logout', { refresh_token: refreshToken }, token);
       }
     } catch {}
-    await AsyncStorage.multiRemove(['rm_token', 'rm_refresh_token', 'rm_user']);
+    await AsyncStorage.multiRemove(['rm_token', 'rm_refresh_token', 'rm_user', 'rm_guest']);
     setToken(null);
     setUser(null);
+    setSkipAuth(false);
+  };
+
+  const continueAsGuest = async () => {
+    await AsyncStorage.setItem('rm_guest', 'true');
+    setSkipAuth(true);
   };
 
   return (
     <AuthContext.Provider value={{
-      user, token, loading,
+      user, token, loading, skipAuth,
       isAuthenticated: !!user,
-      login, register, logout,
+      login, register, logout, continueAsGuest,
     }}>
       {children}
     </AuthContext.Provider>
