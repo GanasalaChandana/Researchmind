@@ -34,17 +34,6 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#0f172a",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
-        }
-      ]
-    ]
+    "plugins": []
   }
 }
