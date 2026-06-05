@@ -14,6 +14,19 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "researchmind-super-secret-change-in-pr
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24       # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 30              # 30 days
+RESET_TOKEN_EXPIRE_MINUTES = 30            # 30 minutes
+
+
+# ── Password reset tokens ─────────────────────────────────────────────────────
+
+def generate_reset_token() -> str:
+    """Generate a URL-safe random token to send to the user."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_reset_token(token: str) -> str:
+    """Hash a reset token for storage (only the hash is stored server-side)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # ── Password (stdlib only — no bcrypt/passlib dependency) ─────────────────────

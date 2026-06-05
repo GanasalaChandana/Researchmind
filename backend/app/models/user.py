@@ -76,3 +76,24 @@ class PasswordChange(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+
+
+class ForgotPassword(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize(cls, v):
+        return v.lower().strip()
+
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError("New password must be at least 8 characters")
+        return v

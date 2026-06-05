@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from ..models.user import (
     UserRegister, UserLogin, UserOut, TokenResponse,
     TokenRefresh, PasswordChange, UserUpdate,
+    ForgotPassword, ResetPassword,
 )
 
 # Import security functions
@@ -13,7 +14,9 @@ from ..auth.security import (
     hash_password, verify_password, decode_token,
     create_access_token, create_refresh_token,
     verify_refresh_token,
+    generate_reset_token, hash_reset_token,
     ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
+    RESET_TOKEN_EXPIRE_MINUTES,
 )
 
 # Import auth dependencies
@@ -24,6 +27,7 @@ from ..auth.user_db import (
     create_user, get_user_by_email, get_user_by_id,
     update_user, get_research_count,
     store_refresh_token, revoke_refresh_token, is_refresh_token_valid,
+    store_reset_token, consume_reset_token,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -230,3 +234,54 @@ async def delete_account(current_user: dict = Depends(get_current_user)):
     # Mark as deleted by changing email to a unique deleted marker
     await update_user(current_user["id"], email=f"deleted_{current_user['id']}")
     return {"message": "Account deleted successfully"}
+
+
+# ── Forgot Password ───────────────────────────────────────────────────────────
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPassword):
+    """
+    Request a password reset. Generates a single-use reset token (valid 30 min).
+
+    Always returns success (even if email doesn't exist) to avoid leaking which
+    emails are registered. The reset token is returned in the response so the
+    frontend can complete the flow; wire this to an email provider in production.
+    """
+    user = await get_user_by_email(body.email)
+
+    # Generic response regardless of whether the user exists (security best practice)
+    generic = {"message": "If an account exists for that email, a reset link has been sent."}
+
+    if not user:
+        return generic
+
+    raw_token = generate_reset_token()
+    token_hash = hash_reset_token(raw_token)
+    expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    await store_reset_token(token_hash, user["id"], expires)
+
+    # In production, email this token as a link instead of returning it.
+    return {**generic, "reset_token": raw_token, "expires_in": RESET_TOKEN_EXPIRE_MINUTES * 60}
+
+
+# ── Reset Password ────────────────────────────────────────────────────────────
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPassword):
+    """
+    Complete a password reset using the token from /forgot-password.
+
+    The token is single-use and expires after 30 minutes.
+    """
+    token_hash = hash_reset_token(body.token)
+    user_id = await consume_reset_token(token_hash)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    new_hashed = hash_password(body.new_password)
+    await update_user(user_id, password=new_hashed)
+    return {"message": "Password has been reset successfully. You can now log in."}

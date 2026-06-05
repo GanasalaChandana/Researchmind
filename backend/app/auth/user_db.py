@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 """
 
+CREATE_RESET_TABLE = """
+CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
 
 async def init_user_tables():
     pool = await get_pool()
@@ -37,6 +46,7 @@ async def init_user_tables():
     async with pool.acquire() as conn:
         await conn.execute(CREATE_USERS_TABLE)
         await conn.execute(CREATE_REFRESH_TABLE)
+        await conn.execute(CREATE_RESET_TABLE)
 
 
 # ── User CRUD ─────────────────────────────────────────────────────────────────
@@ -148,10 +158,44 @@ async def is_refresh_token_valid(jti: str) -> bool:
         return row is not None
 
 
+# ── Password reset tokens ─────────────────────────────────────────────────────
+
+async def store_reset_token(token_hash: str, user_id: str, expires_at: datetime):
+    pool = await get_pool()
+    if pool is None:
+        _reset_store[token_hash] = {"user_id": user_id, "expires_at": expires_at}
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
+            token_hash, user_id, expires_at,
+        )
+
+
+async def consume_reset_token(token_hash: str) -> Optional[str]:
+    """Return user_id if token is valid+unexpired, then delete it (single-use)."""
+    pool = await get_pool()
+    if pool is None:
+        entry = _reset_store.pop(token_hash, None)
+        if entry and entry["expires_at"] > datetime.utcnow():
+            return entry["user_id"]
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT user_id FROM password_resets WHERE token_hash = $1 AND expires_at > NOW()",
+            token_hash,
+        )
+        if not row:
+            return None
+        await conn.execute("DELETE FROM password_resets WHERE token_hash = $1", token_hash)
+        return row["user_id"]
+
+
 # ── In-memory fallback (when DB unavailable) ─────────────────────────────────
 _mem_users: dict[str, dict] = {}
 _mem_by_email: dict[str, str] = {}
 _refresh_store: dict[str, dict] = {}
+_reset_store: dict[str, dict] = {}
 
 
 def _mem_create_user(email, name, hashed_password):
