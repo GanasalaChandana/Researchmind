@@ -1,11 +1,13 @@
 """Password hashing and JWT token logic"""
 import os
 import uuid
+import hashlib
+import secrets
+import base64
 from datetime import datetime, timedelta
 from typing import Optional
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "researchmind-super-secret-change-in-production")
@@ -13,17 +15,25 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24       # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 30              # 30 days
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-# ── Password ──────────────────────────────────────────────────────────────────
+# ── Password (stdlib only — no bcrypt/passlib dependency) ─────────────────────
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    """Hash password using PBKDF2-SHA256 (Python stdlib, no external deps)."""
+    salt = secrets.token_bytes(32)
+    key = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt, 260000)
+    return base64.b64encode(salt + key).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify password against stored PBKDF2-SHA256 hash."""
+    try:
+        data = base64.b64decode(hashed.encode("utf-8"))
+        salt, stored_key = data[:32], data[32:]
+        new_key = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt, 260000)
+        return secrets.compare_digest(stored_key, new_key)
+    except Exception:
+        return False
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────

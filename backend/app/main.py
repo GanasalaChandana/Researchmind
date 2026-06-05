@@ -109,7 +109,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "2.2.0-bcrypt-fixed"}
+    return {"status": "ok", "version": "3.0.0-no-bcrypt"}
 
 
 @app.post("/research/start")
