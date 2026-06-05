@@ -22,6 +22,11 @@ interface AuthTokens {
 // ── Storage ──────────────────────────────────────────────────────────────────
 
 export function saveTokens(tokens: AuthTokens) {
+  // Clear previous user's session history before saving new user
+  const prevUser = getSavedUser();
+  if (prevUser && prevUser.id !== tokens.user.id) {
+    localStorage.removeItem("rm_sessions");
+  }
   localStorage.setItem("rm_access_token", tokens.access_token);
   localStorage.setItem("rm_refresh_token", tokens.refresh_token);
   localStorage.setItem("rm_user", JSON.stringify(tokens.user));
@@ -31,6 +36,7 @@ export function clearTokens() {
   localStorage.removeItem("rm_access_token");
   localStorage.removeItem("rm_refresh_token");
   localStorage.removeItem("rm_user");
+  localStorage.removeItem("rm_sessions"); // Clear session history on logout
 }
 
 export function getAccessToken(): string | null {
