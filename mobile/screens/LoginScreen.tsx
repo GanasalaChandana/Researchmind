@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-export default function LoginScreen() {
+export default function LoginScreen(_props?: any) {
   const { login, register, continueAsGuest } = useAuth();
   const { colors } = useTheme();
   const s = makeStyles(colors);

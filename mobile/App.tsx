@@ -1,8 +1,6 @@
-import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -13,65 +11,88 @@ import HistoryScreen from './screens/HistoryScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import LoginScreen from './screens/LoginScreen';
 
-const Tab = createBottomTabNavigator();
+type Tab = 'Home' | 'Research' | 'History' | 'Settings';
 
-function MainTabs() {
+function AppContent() {
   const { colors } = useTheme();
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: true,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Research') iconName = focused ? 'search' : 'search-outline';
-          else if (route.name === 'History') iconName = focused ? 'time' : 'time-outline';
-          else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.tabBar, borderTopColor: colors.border, borderTopWidth: 1 },
-        headerStyle: { backgroundColor: colors.headerBg },
-        headerTitleStyle: { color: colors.text, fontSize: 18, fontWeight: 'bold' as const },
-        headerTintColor: colors.text,
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'ResearchMind' }} />
-      <Tab.Screen name="Research" component={ResearchScreen} options={{ title: 'Active Research' }} />
-      <Tab.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-    </Tab.Navigator>
-  );
-}
-
-function AppNavigator() {
   const { isAuthenticated, skipAuth, loading } = useAuth();
-  const { colors } = useTheme();
+  const [activeTab, setActiveTab] = useState<Tab>('Home');
+  const [researchParams, setResearchParams] = useState<any>(null);
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: colors.brand, fontSize: 16 }}>Loading...</Text>
       </View>
     );
   }
 
-  // Show Login screen if not authenticated and not guest
   if (!isAuthenticated && !skipAuth) {
     return (
-      <NavigationContainer>
-        <Tab.Navigator screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}>
-          <Tab.Screen name="Login" component={LoginScreen} />
-        </Tab.Navigator>
-      </NavigationContainer>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+        <LoginScreen />
+      </SafeAreaView>
     );
   }
 
+  const navigate = (screen: Tab, params?: any) => {
+    if (params) setResearchParams(params);
+    setActiveTab(screen);
+  };
+
+  const renderScreen = () => {
+    switch (activeTab) {
+      case 'Home': return <HomeScreen navigation={{ navigate }} />;
+      case 'Research': return <ResearchScreen route={{ params: researchParams }} />;
+      case 'History': return <HistoryScreen navigation={{ navigate }} />;
+      case 'Settings': return <SettingsScreen />;
+    }
+  };
+
+  const tabs: { name: Tab; icon: string; activeIcon: string }[] = [
+    { name: 'Home', icon: 'home-outline', activeIcon: 'home' },
+    { name: 'Research', icon: 'search-outline', activeIcon: 'search' },
+    { name: 'History', icon: 'time-outline', activeIcon: 'time' },
+    { name: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
+  ];
+
   return (
-    <NavigationContainer>
-      <MainTabs />
-    </NavigationContainer>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {activeTab === 'Home' ? 'ResearchMind' : activeTab}
+        </Text>
+      </View>
+
+      {/* Screen Content */}
+      <View style={{ flex: 1 }}>
+        {renderScreen()}
+      </View>
+
+      {/* Bottom Tab Bar */}
+      <View style={[styles.tabBar, { backgroundColor: colors.tabBar, borderTopColor: colors.border }]}>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.name;
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(tab.name)}
+            >
+              <Ionicons
+                name={(isActive ? tab.activeIcon : tab.icon) as any}
+                size={24}
+                color={isActive ? colors.brand : colors.textMuted}
+              />
+              <Text style={[styles.tabLabel, { color: isActive ? colors.brand : colors.textMuted }]}>
+                {tab.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -80,9 +101,36 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <AppNavigator />
+          <AppContent />
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    paddingBottom: 4,
+    paddingTop: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+});
