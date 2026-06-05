@@ -3,7 +3,7 @@
     "name": "ResearchMind",
     "slug": "researchmind-mobile",
     "version": "1.0.0",
-    "sdkVersion": "52.0.0",
+    "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "researchmind",
@@ -16,7 +16,9 @@
       "supportsTabletMode": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "ResearchMind needs access to your local network",
-        "NSBonjourServiceTypes": ["_http._tcp"]
+        "NSBonjourServiceTypes": [
+          "_http._tcp"
+        ]
       }
     },
     "android": {
@@ -28,12 +30,16 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.researchmind.mobile",
-      "permissions": ["INTERNET"]
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": []
+    "plugins": [
+      "expo-router"
+    ]
   }
 }
