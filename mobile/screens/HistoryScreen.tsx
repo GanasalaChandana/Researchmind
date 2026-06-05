@@ -6,11 +6,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
 
 export default function HistoryScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { token } = useAuth();
   const s = makeStyles(colors);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,9 @@ export default function HistoryScreen({ navigation }: any) {
       if (statusFilter !== 'all') params.status = statusFilter;
       if (daysFilter !== 'all') params.days = parseInt(daysFilter);
       if (searchQuery) params.search = searchQuery;
-      const { data } = await axios.get(`${BACKEND_URL}/research/sessions/list`, { params });
+      const headers: any = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const { data } = await axios.get(`${BACKEND_URL}/research/sessions/list`, { params, headers });
       setSessions(data);
     } catch {
       Alert.alert('Error', 'Failed to fetch history');

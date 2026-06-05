@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
+  const { user, isAuthenticated, logout } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [cacheEnabled, setCacheEnabled] = useState(true);
 
@@ -42,6 +44,50 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={s.container}>
+
+      {/* ── Account ── */}
+      {isAuthenticated && user ? (
+        <>
+          <Text style={s.sectionTitle}>Account</Text>
+          <View style={s.sectionContent}>
+            <View style={s.settingRow}>
+              <View style={s.settingLeft}>
+                <Ionicons name="person-circle-outline" size={20} color={colors.brand} />
+                <View style={s.settingText}>
+                  <Text style={s.settingTitle}>{user.name}</Text>
+                  <Text style={s.settingSubtitle}>{user.email}</Text>
+                </View>
+              </View>
+            </View>
+            <SettingRow
+              icon="log-out-outline"
+              title="Sign Out"
+              subtitle="Log out of your account"
+              onPress={() =>
+                Alert.alert('Sign Out', 'Are you sure?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Sign Out', style: 'destructive', onPress: logout },
+                ])
+              }
+            />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={s.sectionTitle}>Account</Text>
+          <View style={s.sectionContent}>
+            <View style={s.settingRow}>
+              <View style={s.settingLeft}>
+                <Ionicons name="person-outline" size={20} color={colors.brand} />
+                <View style={s.settingText}>
+                  <Text style={s.settingTitle}>Not signed in</Text>
+                  <Text style={s.settingSubtitle}>Sign in to sync your research</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </>
+      )}
 
       {/* ── Appearance ── */}
       <Text style={s.sectionTitle}>Appearance</Text>

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
 
@@ -18,6 +19,7 @@ const EXAMPLE_TOPICS = [
 
 export default function HomeScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { token } = useAuth();
   const s = makeStyles(colors);
   const [topic, setTopic] = useState('');
   const [depth, setDepth] = useState(3);
@@ -27,9 +29,11 @@ export default function HomeScreen({ navigation }: any) {
     if (!topic.trim()) { Alert.alert('Error', 'Please enter a research topic'); return; }
     setLoading(true);
     try {
-      const { data } = await axios.post(`${BACKEND_URL}/research/start`, { topic: topic.trim(), depth });
+      const headers: any = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const { data } = await axios.post(`${BACKEND_URL}/research/start`, { topic: topic.trim(), depth }, { headers });
       setTopic('');
-      navigation.navigate('Research', { sessionId: data.session_id });
+      navigation.navigate('Research', { sessionId: data.session_id, topic: topic.trim() });
     } catch {
       Alert.alert('Error', 'Failed to start research. Please try again.');
     } finally {
