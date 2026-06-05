@@ -32,8 +32,13 @@ async def init_db():
                 topic       TEXT NOT NULL,
                 status      TEXT NOT NULL DEFAULT 'running',
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                report      JSONB
+                report      JSONB,
+                user_id     TEXT
             )
+        """)
+        # Add user_id column if it doesn't exist (for existing deployments)
+        await conn.execute("""
+            ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id TEXT
         """)
 
         await conn.execute("""
@@ -45,12 +50,12 @@ async def init_db():
         """)
 
 
-async def create_session(session_id: str, topic: str):
+async def create_session(session_id: str, topic: str, user_id: str = None):
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO sessions (id, topic, status) VALUES ($1, $2, 'running')",
-            session_id, topic,
+            "INSERT INTO sessions (id, topic, status, user_id) VALUES ($1, $2, 'running', $3)",
+            session_id, topic, user_id,
         )
 
 

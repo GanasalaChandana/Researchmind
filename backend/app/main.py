@@ -72,7 +72,7 @@ async def _create(session_id: str, topic: str, user_id: str = None):
             "user_id": user_id}
     _mem[session_id] = data
     try:
-        await create_session(session_id, topic)
+        await create_session(session_id, topic, user_id=user_id)
     except Exception:
         pass  # use memory fallback
 
