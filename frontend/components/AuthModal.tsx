@@ -9,13 +9,21 @@ import toast from "react-hot-toast";
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
-export default function AuthModal({ onClose }: { onClose: () => void }) {
+export default function AuthModal({
+  onClose,
+  initialMode = "login",
+  initialToken = "",
+}: {
+  onClose: () => void;
+  initialMode?: Mode;
+  initialToken?: string;
+}) {
   const { setUser } = useAuth();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const [form, setForm] = useState({ name: "", email: "", password: "", token: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", token: initialToken });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function validate() {

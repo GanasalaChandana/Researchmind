@@ -49,8 +49,23 @@ export default function HomePage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customPrompts, setCustomPrompts] = useState<string[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
+
+  // If arriving from a password-reset email link (/?reset_token=...), open the
+  // auth modal in reset mode with the code pre-filled, then clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rt = params.get("reset_token");
+    if (rt) {
+      setResetToken(rt);
+      setShowAuthModal(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reset_token");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("rm_access_token");
@@ -215,7 +230,13 @@ export default function HomePage() {
 
       {/* Auth Modal */}
       <AnimatePresence>
-        {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+        {showAuthModal && (
+          <AuthModal
+            onClose={() => { setShowAuthModal(false); setResetToken(null); }}
+            initialMode={resetToken ? "reset" : "login"}
+            initialToken={resetToken ?? ""}
+          />
+        )}
       </AnimatePresence>
 
       <motion.div

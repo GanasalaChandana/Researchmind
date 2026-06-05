@@ -11,6 +11,12 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "researchmind-change-in-production")
 
+# Email delivery (Resend) — optional. If unset, reset codes are returned in the API
+# response as a dev fallback instead of being emailed.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "ResearchMind <onboarding@resend.dev>")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://researchmind-app.vercel.app")
+
 if not ANTHROPIC_API_KEY:
     raise RuntimeError(
         f"ANTHROPIC_API_KEY not found. Expected .env at: {_env_path}\n"

@@ -30,6 +30,9 @@ from ..auth.user_db import (
     store_reset_token, consume_reset_token,
 )
 
+# Email delivery
+from ..tools.email import email_configured, send_password_reset_email
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -244,8 +247,9 @@ async def forgot_password(body: ForgotPassword):
     Request a password reset. Generates a single-use reset token (valid 30 min).
 
     Always returns success (even if email doesn't exist) to avoid leaking which
-    emails are registered. The reset token is returned in the response so the
-    frontend can complete the flow; wire this to an email provider in production.
+    emails are registered. If email delivery (Resend) is configured, the reset
+    code is emailed and NOT returned in the response. If not configured, the token
+    is returned directly as a development fallback.
     """
     user = await get_user_by_email(body.email)
 
@@ -260,7 +264,15 @@ async def forgot_password(body: ForgotPassword):
     expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
     await store_reset_token(token_hash, user["id"], expires)
 
-    # In production, email this token as a link instead of returning it.
+    if email_configured():
+        # Email the reset code/link; do NOT expose the token in the response.
+        sent = await send_password_reset_email(user["email"], user.get("name", ""), raw_token)
+        if sent:
+            return generic
+        # Fall through to returning the token if the email send failed, so the
+        # user isn't completely blocked.
+
+    # Dev fallback (no email provider configured, or send failed)
     return {**generic, "reset_token": raw_token, "expires_in": RESET_TOKEN_EXPIRE_MINUTES * 60}
 
 
