@@ -12,13 +12,28 @@ async def get_pool() -> Optional[asyncpg.Pool]:
     if _pool is None:
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
+            print("⚠️  DATABASE_URL not set")
             return None
         try:
-            # Railway uses postgres:// but asyncpg needs postgresql://
+            # asyncpg needs postgresql:// scheme
             if db_url.startswith("postgres://"):
                 db_url = db_url.replace("postgres://", "postgresql://", 1)
-            _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5, ssl="require")
-        except Exception:
+            # Strip query params (e.g. ?sslmode=require) — we pass ssl explicitly below
+            if "?" in db_url:
+                db_url = db_url.split("?", 1)[0]
+            # statement_cache_size=0 is required for Supabase's transaction-mode
+            # pooler (port 6543); harmless for session mode / direct connections.
+            _pool = await asyncpg.create_pool(
+                db_url,
+                min_size=1,
+                max_size=5,
+                ssl="require",
+                statement_cache_size=0,
+                command_timeout=30,
+            )
+            print("✅ Postgres pool connected")
+        except Exception as e:
+            print(f"❌ Postgres connection failed: {type(e).__name__}: {e}")
             return None
     return _pool
 
