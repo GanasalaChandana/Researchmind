@@ -53,10 +53,22 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(public_api_router)
 
+# CORS — restrict to known frontend origins. Auth uses bearer tokens (not cookies),
+# so allow_credentials is False, which keeps the config valid and the Public API usable.
+# Override the regex via ALLOWED_ORIGIN_REGEX to add a custom domain.
+import os as _os
+
+_default_origin_regex = (
+    r"^https://researchmind[a-z0-9.-]*\.vercel\.app$"  # production + Vercel previews
+    r"|^http://localhost:\d+$"                          # local dev
+    r"|^http://127\.0\.0\.1:\d+$"
+)
+ALLOWED_ORIGIN_REGEX = _os.environ.get("ALLOWED_ORIGIN_REGEX", _default_origin_regex)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -116,7 +128,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.3.0-rate-limit"}
+    return {"status": "ok", "version": "3.4.0-cors-hardened"}
 
 
 @app.post("/research/start")
