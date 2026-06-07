@@ -1,5 +1,7 @@
 # ResearchMind — Multi-Agent AI Research Agent
 
+[![CI](https://github.com/GanasalaChandana/Researchmind/actions/workflows/ci.yml/badge.svg)](https://github.com/GanasalaChandana/Researchmind/actions/workflows/ci.yml)
+
 > Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + PDF export.
 
 🔗 **Live Demo:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)
