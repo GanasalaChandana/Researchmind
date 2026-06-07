@@ -1,6 +1,6 @@
 """User CRUD operations against PostgreSQL (asyncpg)"""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from ..database import get_pool
@@ -65,7 +65,7 @@ async def create_user(email: str, name: str, hashed_password: str) -> Optional[d
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, email, name, api_key, created_at
             """,
-            user_id, email, name, hashed_password, api_key, datetime.utcnow(),
+            user_id, email, name, hashed_password, api_key, datetime.now(timezone.utc),
         )
         return dict(row) if row else None
 
@@ -150,7 +150,7 @@ async def is_refresh_token_valid(jti: str) -> bool:
     pool = await get_pool()
     if pool is None:
         entry = _refresh_store.get(jti)
-        return entry is not None and entry["expires_at"] > datetime.utcnow()
+        return entry is not None and entry["expires_at"] > datetime.now(timezone.utc)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT 1 FROM refresh_tokens WHERE jti = $1 AND expires_at > NOW()", jti
@@ -177,7 +177,7 @@ async def consume_reset_token(token_hash: str) -> Optional[str]:
     pool = await get_pool()
     if pool is None:
         entry = _reset_store.pop(token_hash, None)
-        if entry and entry["expires_at"] > datetime.utcnow():
+        if entry and entry["expires_at"] > datetime.now(timezone.utc):
             return entry["user_id"]
         return None
     async with pool.acquire() as conn:
@@ -204,7 +204,7 @@ def _mem_create_user(email, name, hashed_password):
         "id": uid, "email": email, "name": name,
         "password": hashed_password,
         "api_key": f"rm_{uuid.uuid4().hex}",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "is_active": True,
     }
     _mem_users[uid] = user

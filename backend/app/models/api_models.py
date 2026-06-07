@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class APIKey(BaseModel):
@@ -28,7 +28,7 @@ class APIResponse(BaseModel):
 
     def __init__(self, **data):
         if not data.get("timestamp"):
-            data["timestamp"] = datetime.utcnow().isoformat()
+            data["timestamp"] = datetime.now(timezone.utc).isoformat()
         super().__init__(**data)
 
 

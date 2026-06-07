@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -19,7 +19,7 @@ class AgentEvent(BaseModel):
 
     def __init__(self, **data):
         if not data.get("timestamp"):
-            data["timestamp"] = datetime.utcnow().isoformat()
+            data["timestamp"] = datetime.now(timezone.utc).isoformat()
         super().__init__(**data)
 
 
@@ -60,7 +60,7 @@ class ResearchReport(BaseModel):
 
     def __init__(self, **data):
         if not data.get("created_at"):
-            data["created_at"] = datetime.utcnow().isoformat()
+            data["created_at"] = datetime.now(timezone.utc).isoformat()
         super().__init__(**data)
 
 

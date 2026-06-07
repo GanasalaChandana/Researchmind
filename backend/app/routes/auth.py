@@ -1,5 +1,5 @@
 """Auth routes: register, login, refresh, logout, me, update profile, change password"""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 
 # Import models
@@ -83,7 +83,7 @@ async def register(body: UserRegister, request: Request):
     # Store refresh token
     payload = decode_token(refresh_token)
     if payload:
-        expires = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         await store_refresh_token(payload["jti"], user["id"], expires)
 
     return TokenResponse(
@@ -120,7 +120,7 @@ async def login(body: UserLogin, request: Request):
 
     payload = decode_token(refresh_token)
     if payload:
-        expires = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         await store_refresh_token(payload["jti"], user["id"], expires)
 
     count = await get_research_count(user["id"])
@@ -163,7 +163,7 @@ async def refresh_tokens(body: TokenRefresh):
 
     new_payload = decode_token(new_refresh)
     if new_payload:
-        expires = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         await store_refresh_token(new_payload["jti"], user["id"], expires)
 
     count = await get_research_count(user["id"])
@@ -278,7 +278,7 @@ async def forgot_password(body: ForgotPassword, request: Request):
 
     raw_token = generate_reset_token()
     token_hash = hash_reset_token(raw_token)
-    expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
     await store_reset_token(token_hash, user["id"], expires)
 
     if email_configured():

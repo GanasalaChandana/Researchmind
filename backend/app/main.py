@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at startup
 
@@ -80,7 +80,7 @@ _mem: dict[str, dict] = {}
 
 async def _create(session_id: str, topic: str, user_id: str = None):
     data = {"id": session_id, "topic": topic, "status": "running",
-            "created_at": datetime.utcnow().isoformat(), "report": None,
+            "created_at": datetime.now(timezone.utc).isoformat(), "report": None,
             "user_id": user_id}
     _mem[session_id] = data
     try:
@@ -162,7 +162,7 @@ async def get_sessions(
         filtered = [s for s in filtered if search.lower() in s.get("topic", "").lower()]
     if days:
         from datetime import datetime, timedelta
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
 
     filtered = filtered[:limit]

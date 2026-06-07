@@ -1,7 +1,7 @@
 """API Key management and validation"""
 import secrets
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # In-memory API key store (in production, use database)
@@ -14,7 +14,7 @@ async def generate_api_key() -> str:
     """Generate a new API key"""
     key = f"rm_{secrets.token_urlsafe(32)}"
     _api_keys[key] = {
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "last_used": None,
         "requests_count": 0,
         "is_active": True,
@@ -35,13 +35,13 @@ async def validate_api_key(key: str) -> bool:
 async def update_key_usage(key: str) -> None:
     """Update API key usage statistics"""
     if key in _api_keys:
-        _api_keys[key]["last_used"] = datetime.utcnow().isoformat()
+        _api_keys[key]["last_used"] = datetime.now(timezone.utc).isoformat()
         _api_keys[key]["requests_count"] = _api_keys[key].get("requests_count", 0) + 1
 
 
 async def check_rate_limit(key: str) -> bool:
     """Check if API key is within rate limit"""
-    now = datetime.utcnow().timestamp()
+    now = datetime.now(timezone.utc).timestamp()
     hour_ago = now - 3600
 
     # Get or create request timestamps for this key

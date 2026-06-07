@@ -4,7 +4,7 @@ import json
 import hmac
 import hashlib
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import urllib.request
 import urllib.error
@@ -50,7 +50,7 @@ async def register_webhook(
         "url": url,
         "events": events,
         "secret": secret,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "delivery_count": 0,
         "last_delivery": None,
         "last_status": None,
@@ -76,7 +76,7 @@ async def register_global_webhook(
         "url": url,
         "events": events,
         "secret": secret,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "delivery_count": 0,
     }
     if api_key not in _global_webhooks:
@@ -112,7 +112,7 @@ async def _deliver_webhook(webhook: dict, payload: dict, attempt: int = 0):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             webhook["delivery_count"] = webhook.get("delivery_count", 0) + 1
-            webhook["last_delivery"] = datetime.utcnow().isoformat()
+            webhook["last_delivery"] = datetime.now(timezone.utc).isoformat()
             webhook["last_status"] = resp.status
             return True
     except Exception as e:
@@ -144,7 +144,7 @@ async def fire_webhook_event(
     payload = {
         "event": event,
         "session_id": session_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "delivery_id": f"{session_id[:8]}_{int(time.time())}",
         "data": data,
     }
