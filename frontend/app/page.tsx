@@ -93,12 +93,12 @@ export default function HomePage() {
     const params = new URLSearchParams({
       offset: String(offset),
       limit: String(itemsPerPage),
-      status: statusFilter === "all" ? "" : statusFilter,
       favorites: String(favoritesOnly),
-      search: historySearch,
-      days: daysFilter ? String(daysFilter) : "",
-      tag: selectedTag || "",
     });
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (historySearch) params.set("search", historySearch);
+    if (daysFilter) params.set("days", String(daysFilter));
+    if (selectedTag) params.set("tag", selectedTag);
 
     fetch(`/api/research/sessions?${params}`, { headers })
       .then((r) => r.json())
