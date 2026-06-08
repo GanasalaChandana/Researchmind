@@ -29,8 +29,8 @@ body {
 }
 
 /* Prevent horizontal scroll without blocking vertical */
-html { overflow-x: hidden; }
-body { overflow-x: hidden; }
+html { overflow-x: clip; }
+body { overflow-x: clip; }
 
 /* Better touch targets on mobile */
 button { min-height: 36px; }

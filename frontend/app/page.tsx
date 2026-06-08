@@ -274,7 +274,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-12">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 py-12">
       {/* Top-right: Auth + Theme */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
         {isAuthenticated ? (
