@@ -633,60 +633,73 @@ export default function HomePage() {
                     <motion.div
                       key={s.id}
                       layout
-                      initial={{ opacity: 0, y: 4 }}
+                      initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.97 }}
-                      className="relative"
+                      className="relative group"
                     >
-                      <button
+                      {/* Card */}
+                      <div
                         onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
-                        className="w-full glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/40 transition-colors text-left"
+                        className="relative rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.06] hover:bg-slate-50 hover:border-indigo-400/40 dark:hover:border-indigo-500/30 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-md"
                       >
-                        <StatusIcon status={s.status} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm dark:text-white text-slate-800 truncate">{s.topic}</p>
-                          <div className="flex items-center gap-2 flex-wrap mt-1">
-                            <p className="text-xs dark:text-slate-500 text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
-                            {(s.tags && s.tags.length > 0) && (
-                              <div className="flex gap-1 flex-wrap">
-                                {(Array.isArray(s.tags) ? s.tags : []).map((tag: any) => (
-                                  <span
-                                    key={tag.name}
-                                    className="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedTag(tag.name);
-                                    }}
-                                  >
-                                    {tag.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                        {/* Left status accent bar */}
+                        <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl ${
+                          s.status === "completed" ? "bg-emerald-400" :
+                          s.status === "failed"    ? "bg-red-400" :
+                                                     "bg-indigo-400"
+                        }`} />
+
+                        <div className="pl-5 pr-24 py-4">
+                          {/* Topic */}
+                          <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-2 line-clamp-2">
+                            {s.topic}
+                          </h3>
+
+                          {/* Meta row */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                              s.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
+                              s.status === "failed"    ? "bg-red-500/15 text-red-400" :
+                                                         "bg-indigo-500/15 text-indigo-400"
+                            }`}>
+                              <StatusIcon status={s.status} />
+                              <span className="capitalize">{s.status}</span>
+                            </span>
+                            <span className="text-xs text-slate-500">{timeAgo(s.created_at)}</span>
+
+                            {/* Tags inline */}
+                            {(Array.isArray(s.tags) ? s.tags : []).slice(0, 3).map((tag: any) => (
+                              <button
+                                key={tag.name}
+                                onClick={(e) => { e.stopPropagation(); setSelectedTag(tag.name); }}
+                                className="text-xs px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 border border-brand-500/20 transition-colors"
+                              >
+                                #{tag.name}
+                              </button>
+                            ))}
                           </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
-                      </button>
 
-                      {/* Favorite star (signed-in users only) */}
+                        {/* Right: chevron */}
+                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                      </div>
+
+                      {/* Favorite star */}
                       {isAuthenticated && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleToggleFavorite(s); }}
-                          className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                          className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-white/10 transition-colors z-10"
                           title={s.is_favorite ? "Remove from favorites" : "Add to favorites"}
                         >
-                          <Star
-                            className={`w-4 h-4 transition-colors ${
-                              s.is_favorite
-                                ? "fill-amber-400 text-amber-400"
-                                : "text-slate-500 hover:text-amber-400"
-                            }`}
-                          />
+                          <Star className={`w-4 h-4 transition-colors ${
+                            s.is_favorite ? "fill-amber-400 text-amber-400" : "text-slate-500 hover:text-amber-400"
+                          }`} />
                         </button>
                       )}
 
                       {/* Actions menu */}
-                      <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                      <div className="absolute right-[4.5rem] top-1/2 -translate-y-1/2 z-10">
                         <button
                           onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === s.id ? null : s.id); }}
                           className="p-1.5 rounded-lg hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
@@ -808,17 +821,15 @@ export default function HomePage() {
 
             {/* Pagination */}
             {totalSessions > itemsPerPage && (
-              <div className="mt-6 flex items-center justify-between gap-4 glass rounded-lg p-4">
-                <div className="text-sm text-slate-400">
-                  {filteredSessions.length === 0
-                    ? "No results"
-                    : `Page ${currentPage} of ${Math.ceil(totalSessions / itemsPerPage)} (${totalSessions} total)`}
-                </div>
+              <div className="mt-4 flex items-center justify-between gap-4 px-1">
+                <p className="text-xs text-slate-500">
+                  {`${(currentPage - 1) * itemsPerPage + 1}–${Math.min(currentPage * itemsPerPage, totalSessions)} of ${totalSessions}`}
+                </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1.5 rounded-lg text-sm border border-white/10 text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border dark:border-white/10 border-slate-200 dark:text-slate-400 text-slate-600 hover:dark:text-white hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     ← Prev
                   </button>
