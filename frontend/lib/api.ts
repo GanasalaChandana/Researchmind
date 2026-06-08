@@ -199,7 +199,7 @@ export async function searchReportContent(query: string): Promise<SearchResult[]
   const headers = _authHeaders();
   try {
     const res = await fetch(
-      `/api/research/search?q=${encodeURIComponent(query.trim())}`,
+      `/api/search?q=${encodeURIComponent(query.trim())}`,
       { headers, cache: "no-store" }
     );
     if (!res.ok) return [];
