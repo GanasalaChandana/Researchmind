@@ -16,14 +16,10 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "ResearchMind <onboarding@resend.dev>")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://researchmind-app.vercel.app")
 
+# Keys are validated at runtime when actually used (not at import time),
+# so tests that don't call the LLM/search can still run without a .env file.
+import warnings as _warnings
 if not GROQ_API_KEY:
-    raise RuntimeError(
-        f"GROQ_API_KEY not found. Expected .env at: {_env_path}\n"
-        f"File exists: {_env_path.exists()}"
-    )
-
+    _warnings.warn("GROQ_API_KEY is not set — LLM calls will fail at runtime.")
 if not TAVILY_API_KEY:
-    raise RuntimeError(
-        f"TAVILY_API_KEY not found. Expected .env at: {_env_path}\n"
-        f"File exists: {_env_path.exists()}"
-    )
+    _warnings.warn("TAVILY_API_KEY is not set — web search calls will fail at runtime.")
