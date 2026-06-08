@@ -47,3 +47,17 @@ export interface ResearchReport {
   knowledge_graph: KnowledgeGraph;
   created_at: string;
 }
+
+export interface SessionTag {
+  name: string;
+  color?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  topic: string;
+  status: "running" | "completed" | "failed";
+  created_at: string;
+  is_favorite?: boolean;
+  tags?: SessionTag[];
+}

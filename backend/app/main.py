@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at startup
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from .models.schemas import ResearchRequest, AgentEvent, WebhookRequest, FavoriteRequest
@@ -13,7 +13,7 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token, add_tag, remove_tag, list_user_tags
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -161,6 +161,7 @@ async def get_sessions(
     limit: int = 20,
     offset: int = 0,
     favorites: bool = False,
+    tag: str = None,
     current_user: dict = Depends(get_optional_user),
 ):
     """List sessions with pagination — filters to current user's sessions if authenticated"""
@@ -177,6 +178,9 @@ async def get_sessions(
         from datetime import datetime, timedelta
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
+    if tag:
+        # Filter by tag
+        filtered = [s for s in filtered if any(t.get("name") == tag for t in (s.get("tags") or []))]
 
     total = len(filtered)
     # Paginate: offset-based pagination
@@ -210,6 +214,52 @@ async def toggle_favorite(
         raise HTTPException(status_code=403, detail="Not your session")
     await _set_favorite(session_id, body.is_favorite)
     return {"id": session_id, "is_favorite": body.is_favorite}
+
+
+@app.post("/research/{session_id}/tags")
+async def add_session_tag(
+    session_id: str,
+    tag_name: str = Query(...),
+    color: str = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Add a tag to a research session"""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+
+    updated = await add_tag(session_id, tag_name, color)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to add tag")
+    return {"id": session_id, "tags": updated.get("tags", [])}
+
+
+@app.delete("/research/{session_id}/tags")
+async def remove_session_tag(
+    session_id: str,
+    tag_name: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a tag from a research session"""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+
+    updated = await remove_tag(session_id, tag_name)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to remove tag")
+    return {"id": session_id, "tags": updated.get("tags", [])}
+
+
+@app.get("/research/tags")
+async def get_user_tags(current_user: dict = Depends(get_current_user)):
+    """List all tags for the current user"""
+    tags = await list_user_tags(current_user["id"])
+    return {"tags": tags}
 
 
 @app.get("/research/{session_id}/report")

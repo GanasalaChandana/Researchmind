@@ -59,6 +59,9 @@ async def init_db():
         await conn.execute(
             "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE"
         )
+        await conn.execute(
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'"
+        )
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS research_cache (
@@ -294,3 +297,88 @@ async def delete_share_token(token: str) -> bool:
             return result == "DELETE 1"
     except Exception:
         return False
+
+
+async def add_tag(session_id: str, tag_name: str, color: str = None) -> Optional[dict]:
+    """Add a tag to a session. Returns the session or None."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            # Get current tags
+            row = await conn.fetchrow("SELECT tags FROM sessions WHERE id = $1", session_id)
+            if not row:
+                return None
+
+            current_tags = row["tags"] or []
+            if isinstance(current_tags, str):
+                current_tags = json.loads(current_tags)
+
+            # Check if tag already exists
+            if any(t.get("name") == tag_name for t in current_tags):
+                # Tag already exists, return session as-is
+                return await get_session(session_id)
+
+            # Add new tag
+            new_tag = {"name": tag_name}
+            if color:
+                new_tag["color"] = color
+            current_tags.append(new_tag)
+
+            await conn.execute(
+                "UPDATE sessions SET tags = $1 WHERE id = $2",
+                json.dumps(current_tags),
+                session_id,
+            )
+            return await get_session(session_id)
+    except Exception as e:
+        print(f"Failed to add tag: {e}")
+        return None
+
+
+async def remove_tag(session_id: str, tag_name: str) -> Optional[dict]:
+    """Remove a tag from a session. Returns the session or None."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            # Get current tags
+            row = await conn.fetchrow("SELECT tags FROM sessions WHERE id = $1", session_id)
+            if not row:
+                return None
+
+            current_tags = row["tags"] or []
+            if isinstance(current_tags, str):
+                current_tags = json.loads(current_tags)
+
+            # Remove tag
+            updated_tags = [t for t in current_tags if t.get("name") != tag_name]
+
+            await conn.execute(
+                "UPDATE sessions SET tags = $1 WHERE id = $2",
+                json.dumps(updated_tags),
+                session_id,
+            )
+            return await get_session(session_id)
+    except Exception as e:
+        print(f"Failed to remove tag: {e}")
+        return None
+
+
+async def list_user_tags(user_id: str) -> list[str]:
+    """List all unique tag names for a user's sessions."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT tags FROM sessions WHERE user_id = $1",
+                user_id,
+            )
+            tag_names = set()
+            for row in rows:
+                tags = row["tags"] or []
+                if isinstance(tags, str):
+                    tags = json.loads(tags)
+                for tag in tags:
+                    tag_names.add(tag.get("name", ""))
+            return sorted(list(tag_names))
+    except Exception:
+        return []

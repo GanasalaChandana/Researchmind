@@ -85,3 +85,41 @@ export async function getSharedResearch(shareToken: string) {
   if (!res.ok) throw new Error("Share link expired or invalid");
   return res.json();
 }
+
+export async function addTag(sessionId: string, tagName: string, color?: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const params = new URLSearchParams({ tag_name: tagName });
+  if (color) params.append("color", color);
+
+  const res = await fetch(`/api/research/${sessionId}/tags?${params}`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) throw new Error("Failed to add tag");
+}
+
+export async function removeTag(sessionId: string, tagName: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/research/${sessionId}/tags?tag_name=${encodeURIComponent(tagName)}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) throw new Error("Failed to remove tag");
+}
+
+export async function getUserTags(): Promise<string[]> {
+  const headers: Record<string, string> = {};
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/research/tags`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.tags || [];
+}

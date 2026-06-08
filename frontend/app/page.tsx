@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { startResearch, deleteResearch, retryResearch, toggleFavorite } from "@/lib/api";
+import { startResearch, deleteResearch, retryResearch, toggleFavorite, addTag, removeTag, getUserTags } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, ChevronRight, Clock,
@@ -25,12 +25,18 @@ const EXAMPLE_TOPICS = [
   "History and evolution of the internet",
 ];
 
+interface SessionTag {
+  name: string;
+  color?: string;
+}
+
 interface SessionSummary {
   id: string;
   topic: string;
   status: "running" | "completed" | "failed";
   created_at: string;
   is_favorite?: boolean;
+  tags?: SessionTag[];
 }
 
 export default function HomePage() {
@@ -54,6 +60,10 @@ export default function HomePage() {
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSessions, setTotalSessions] = useState(0);
+  const [userTags, setUserTags] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState("");
+  const [showTagInput, setShowTagInput] = useState<string | null>(null);
   const itemsPerPage = 10;
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
@@ -87,6 +97,7 @@ export default function HomePage() {
       favorites: String(favoritesOnly),
       search: historySearch,
       days: daysFilter ? String(daysFilter) : "",
+      tag: selectedTag || "",
     });
 
     fetch(`/api/research/sessions?${params}`, { headers })
@@ -107,10 +118,19 @@ export default function HomePage() {
       .catch(() => {});
   }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter]);
 
+  // Load user tags when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUserTags([]);
+      return;
+    }
+    getUserTags().then(setUserTags).catch(() => {});
+  }, [isAuthenticated]);
+
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [historySearch, statusFilter, favoritesOnly, daysFilter]);
+  }, [historySearch, statusFilter, favoritesOnly, daysFilter, selectedTag]);
 
   // Topic suggestions from history
   useEffect(() => {
@@ -156,10 +176,40 @@ export default function HomePage() {
     }
   }
 
+  async function handleAddTag(sessionId: string, tagName: string) {
+    if (!tagName.trim()) return;
+    try {
+      await addTag(sessionId, tagName.trim());
+      // Refresh tags and sessions
+      const tags = await getUserTags();
+      setUserTags(tags);
+      // Trigger re-fetch of sessions
+      setCurrentPage(1);
+    } catch {
+      toast.error("Failed to add tag");
+    }
+    setShowTagInput(null);
+    setTagInput("");
+  }
+
+  async function handleRemoveTag(sessionId: string, tagName: string) {
+    try {
+      await removeTag(sessionId, tagName);
+      // Refresh tags and sessions
+      const tags = await getUserTags();
+      setUserTags(tags);
+      // Trigger re-fetch of sessions
+      setCurrentPage(1);
+    } catch {
+      toast.error("Failed to remove tag");
+    }
+  }
+
   const activeFilterCount = [
     statusFilter !== "all",
     daysFilter !== null,
     historySearch.trim() !== "",
+    selectedTag !== null,
   ].filter(Boolean).length;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -510,10 +560,40 @@ export default function HomePage() {
                         ))}
                       </div>
                     </div>
+                    {/* Tag filter */}
+                    {isAuthenticated && userTags.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Tag className="w-3 h-3 text-slate-500" />
+                          <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Tags</span>
+                        </div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => setSelectedTag(null)}
+                            className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                              selectedTag === null ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                            }`}
+                          >
+                            All
+                          </button>
+                          {userTags.map((tag) => (
+                            <button
+                              key={tag}
+                              onClick={() => setSelectedTag(tag)}
+                              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                                selectedTag === tag ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                              }`}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {/* Reset */}
                     {activeFilterCount > 0 && (
                       <button
-                        onClick={() => { setStatusFilter("all"); setDaysFilter(null); setHistorySearch(""); }}
+                        onClick={() => { setStatusFilter("all"); setDaysFilter(null); setHistorySearch(""); setSelectedTag(null); }}
                         className="text-xs text-red-400 hover:text-red-300 transition-colors"
                       >
                         ✕ Clear all filters
@@ -552,7 +632,25 @@ export default function HomePage() {
                         <StatusIcon status={s.status} />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm dark:text-white text-slate-800 truncate">{s.topic}</p>
-                          <p className="text-xs dark:text-slate-500 text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-1">
+                            <p className="text-xs dark:text-slate-500 text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
+                            {(s.tags && s.tags.length > 0) && (
+                              <div className="flex gap-1 flex-wrap">
+                                {s.tags.map((tag: any) => (
+                                  <span
+                                    key={tag.name}
+                                    className="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedTag(tag.name);
+                                    }}
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
                       </button>
@@ -589,9 +687,21 @@ export default function HomePage() {
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0, scale: 0.95 }}
-                              className="absolute right-0 top-8 glass rounded-xl overflow-hidden z-30 w-36 border border-white/10"
+                              className="absolute right-0 top-8 glass rounded-xl overflow-hidden z-30 w-40 border border-white/10"
                               onClick={e => e.stopPropagation()}
                             >
+                              {isAuthenticated && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowTagInput(showTagInput === s.id ? null : s.id);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"
+                                >
+                                  <Tag className="w-3.5 h-3.5 text-brand-400" />
+                                  Add tag
+                                </button>
+                              )}
                               {s.status === "failed" && (
                                 <button
                                   onClick={(e) => handleRetry(e, s.id, s.topic)}
@@ -612,6 +722,71 @@ export default function HomePage() {
                           )}
                         </AnimatePresence>
                       </div>
+
+                      {/* Tag input */}
+                      {showTagInput === s.id && isAuthenticated && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="glass rounded-xl p-3 mt-2 flex gap-2"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <input
+                            type="text"
+                            placeholder="New tag..."
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddTag(s.id, tagInput);
+                              } else if (e.key === "Escape") {
+                                setShowTagInput(null);
+                                setTagInput("");
+                              }
+                            }}
+                            className="flex-1 bg-slate-800/50 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500/50"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleAddTag(s.id, tagInput)}
+                            className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded text-sm transition-colors"
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowTagInput(null);
+                              setTagInput("");
+                            }}
+                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                          >
+                            <X className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </motion.div>
+                      )}
+
+                      {/* Existing tags (with remove option) */}
+                      {isAuthenticated && s.tags && s.tags.length > 0 && showTagInput !== s.id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="glass rounded-xl p-3 mt-2 flex flex-wrap gap-2"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {s.tags.map((tag: any) => (
+                            <button
+                              key={tag.name}
+                              onClick={() => handleRemoveTag(s.id, tag.name)}
+                              className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-slate-700/50 hover:bg-red-500/20 text-slate-300 hover:text-red-300 transition-colors border border-slate-600/50 hover:border-red-500/30"
+                              title="Click to remove"
+                            >
+                              {tag.name}
+                              <X className="w-3 h-3" />
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
                     </motion.div>
                   ))
                 )}
