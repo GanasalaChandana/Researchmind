@@ -218,8 +218,19 @@ async def cache_research(topic: str, report: dict):
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
+    # asyncpg returns JSONB columns as strings — parse them to Python objects
     if d.get("report") and isinstance(d["report"], str):
-        d["report"] = json.loads(d["report"])
+        try:
+            d["report"] = json.loads(d["report"])
+        except Exception:
+            d["report"] = None
+    if "tags" in d and isinstance(d["tags"], str):
+        try:
+            d["tags"] = json.loads(d["tags"])
+        except Exception:
+            d["tags"] = []
+    if not isinstance(d.get("tags"), list):
+        d["tags"] = []
     if d.get("created_at"):
         d["created_at"] = d["created_at"].isoformat()
     return d

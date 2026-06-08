@@ -649,7 +649,7 @@ export default function HomePage() {
                             <p className="text-xs dark:text-slate-500 text-slate-500 capitalize">{s.status} · {timeAgo(s.created_at)}</p>
                             {(s.tags && s.tags.length > 0) && (
                               <div className="flex gap-1 flex-wrap">
-                                {s.tags.map((tag: any) => (
+                                {(Array.isArray(s.tags) ? s.tags : []).map((tag: any) => (
                                   <span
                                     key={tag.name}
                                     className="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30"
@@ -787,7 +787,7 @@ export default function HomePage() {
                           className="glass rounded-xl p-3 mt-2 flex flex-wrap gap-2"
                           onClick={e => e.stopPropagation()}
                         >
-                          {s.tags.map((tag: any) => (
+                          {(Array.isArray(s.tags) ? s.tags : []).map((tag: any) => (
                             <button
                               key={tag.name}
                               onClick={() => handleRemoveTag(s.id, tag.name)}
