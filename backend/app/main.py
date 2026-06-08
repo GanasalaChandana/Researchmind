@@ -8,12 +8,12 @@ from .config import ANTHROPIC_API_KEY  # noqa: F401 — triggers dotenv load at 
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
-from .models.schemas import ResearchRequest, AgentEvent, WebhookRequest
+from .models.schemas import ResearchRequest, AgentEvent, WebhookRequest, FavoriteRequest
 from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -23,7 +23,7 @@ from .tools.webhooks import (
 from .auth.user_db import init_user_tables
 from .routes.auth import router as auth_router
 from .routes.public_api import router as public_api_router
-from .auth.dependencies import get_optional_user
+from .auth.dependencies import get_optional_user, get_current_user
 
 
 @asynccontextmanager
@@ -81,12 +81,21 @@ _mem: dict[str, dict] = {}
 async def _create(session_id: str, topic: str, user_id: str = None):
     data = {"id": session_id, "topic": topic, "status": "running",
             "created_at": datetime.now(timezone.utc).isoformat(), "report": None,
-            "user_id": user_id}
+            "user_id": user_id, "is_favorite": False}
     _mem[session_id] = data
     try:
         await create_session(session_id, topic, user_id=user_id)
     except Exception:
         pass  # use memory fallback
+
+
+async def _set_favorite(session_id: str, is_favorite: bool):
+    if session_id in _mem:
+        _mem[session_id]["is_favorite"] = is_favorite
+    try:
+        await set_favorite(session_id, is_favorite)
+    except Exception:
+        pass
 
 
 async def _update(session_id: str, status: str, report=None):
@@ -110,13 +119,15 @@ async def _get(session_id: str):
     return _mem.get(session_id)
 
 
-async def _list(user_id: str = None):
+async def _list(user_id: str = None, favorites_only: bool = False):
     try:
-        return await list_sessions(user_id=user_id)
+        return await list_sessions(user_id=user_id, favorites_only=favorites_only)
     except Exception:
         sessions = list(_mem.values())
         if user_id:
             sessions = [s for s in sessions if s.get("user_id") == user_id]
+        if favorites_only:
+            sessions = [s for s in sessions if s.get("is_favorite")]
         return sorted(sessions, key=lambda s: s["created_at"], reverse=True)[:20]
 
 
@@ -128,7 +139,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.4.0-cors-hardened"}
+    return {"status": "ok", "version": "3.5.0-favorites"}
 
 
 @app.post("/research/start")
@@ -148,11 +159,12 @@ async def get_sessions(
     search: str = None,
     days: int = None,
     limit: int = 20,
+    favorites: bool = False,
     current_user: dict = Depends(get_optional_user),
 ):
     """List sessions — filters to current user's sessions if authenticated"""
     user_id = current_user["id"] if current_user else None
-    sessions = await _list(user_id=user_id)
+    sessions = await _list(user_id=user_id, favorites_only=favorites)
 
     # Apply additional filters
     filtered = sessions
@@ -172,6 +184,23 @@ async def get_sessions(
         {k: v for k, v in s.items() if k != "report"}
         for s in filtered
     ]
+
+
+@app.post("/research/{session_id}/favorite")
+async def toggle_favorite(
+    session_id: str,
+    body: FavoriteRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Star/unstar a research session. Only the owner may favorite their session."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # Ownership check (sessions created while logged in carry user_id)
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+    await _set_favorite(session_id, body.is_favorite)
+    return {"id": session_id, "is_favorite": body.is_favorite}
 
 
 @app.get("/research/{session_id}/report")

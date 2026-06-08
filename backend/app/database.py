@@ -48,13 +48,15 @@ async def init_db():
                 status      TEXT NOT NULL DEFAULT 'running',
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 report      JSONB,
-                user_id     TEXT
+                user_id     TEXT,
+                is_favorite BOOLEAN NOT NULL DEFAULT FALSE
             )
         """)
-        # Add user_id column if it doesn't exist (for existing deployments)
-        await conn.execute("""
-            ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id TEXT
-        """)
+        # Add columns if they don't exist (migrations for existing deployments)
+        await conn.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id TEXT")
+        await conn.execute(
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE"
+        )
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS research_cache (
@@ -104,6 +106,7 @@ async def list_sessions(
     search_query: str = None,
     days_back: int = None,
     user_id: str = None,
+    favorites_only: bool = False,
 ) -> list[dict]:
     """List sessions with optional filtering, scoped to user if user_id provided"""
     pool = await get_pool()
@@ -126,11 +129,22 @@ async def list_sessions(
         if days_back:
             query += " AND created_at > NOW() - INTERVAL '" + str(days_back) + " days'"
 
+        if favorites_only:
+            query += " AND is_favorite = TRUE"
+
         query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
         params.append(limit)
 
         rows = await conn.fetch(query, *params)
         return [_row_to_dict(r) for r in rows]
+
+
+async def set_favorite(session_id: str, is_favorite: bool):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sessions SET is_favorite=$1 WHERE id=$2", is_favorite, session_id
+        )
 
 
 async def delete_session(session_id: str):

@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { startResearch, deleteResearch, retryResearch } from "@/lib/api";
+import { startResearch, deleteResearch, retryResearch, toggleFavorite } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, ChevronRight, Clock,
   CheckCircle2, XCircle, Loader2, Filter,
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
-  SortAsc, SortDesc, Calendar, Tag, X
+  SortAsc, SortDesc, Calendar, Tag, X, Star
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -30,6 +30,7 @@ interface SessionSummary {
   topic: string;
   status: "running" | "completed" | "failed";
   created_at: string;
+  is_favorite?: boolean;
 }
 
 export default function HomePage() {
@@ -40,6 +41,7 @@ export default function HomePage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [historySearch, setHistorySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "failed">("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -110,12 +112,13 @@ export default function HomePage() {
     let result = sessions.filter((s) => {
       const matchTopic = s.topic.toLowerCase().includes(historySearch.toLowerCase());
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
+      const matchFavorite = !favoritesOnly || s.is_favorite;
       let matchDate = true;
       if (daysFilter) {
         const cutoff = new Date(Date.now() - daysFilter * 24 * 60 * 60 * 1000);
         matchDate = new Date(s.created_at) > cutoff;
       }
-      return matchTopic && matchStatus && matchDate;
+      return matchTopic && matchStatus && matchFavorite && matchDate;
     });
 
     // Sort
@@ -125,7 +128,24 @@ export default function HomePage() {
     });
 
     return result;
-  }, [sessions, historySearch, statusFilter, daysFilter, sortOrder]);
+  }, [sessions, historySearch, statusFilter, favoritesOnly, daysFilter, sortOrder]);
+
+  async function handleToggleFavorite(s: SessionSummary) {
+    if (!isAuthenticated) {
+      toast.error("Sign in to favorite research");
+      return;
+    }
+    const next = !s.is_favorite;
+    // Optimistic update
+    setSessions((prev) => prev.map((x) => (x.id === s.id ? { ...x, is_favorite: next } : x)));
+    try {
+      await toggleFavorite(s.id, next);
+    } catch {
+      // Revert on failure
+      setSessions((prev) => prev.map((x) => (x.id === s.id ? { ...x, is_favorite: !next } : x)));
+      toast.error("Couldn't update favorite");
+    }
+  }
 
   const activeFilterCount = [
     statusFilter !== "all",
@@ -447,6 +467,18 @@ export default function HomePage() {
                             {f}
                           </button>
                         ))}
+                        {/* Favorites toggle */}
+                        <button
+                          onClick={() => setFavoritesOnly((v) => !v)}
+                          className={`text-xs px-3 py-1 rounded-full transition-colors flex items-center gap-1 ${
+                            favoritesOnly
+                              ? "bg-amber-500 text-white"
+                              : "dark:text-slate-400 text-slate-600 hover:text-amber-500 glass"
+                          }`}
+                        >
+                          <Star className={`w-3 h-3 ${favoritesOnly ? "fill-white" : ""}`} />
+                          Favorites
+                        </button>
                       </div>
                     </div>
                     {/* Date filter */}
@@ -515,6 +547,23 @@ export default function HomePage() {
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
                       </button>
+
+                      {/* Favorite star (signed-in users only) */}
+                      {isAuthenticated && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggleFavorite(s); }}
+                          className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                          title={s.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star
+                            className={`w-4 h-4 transition-colors ${
+                              s.is_favorite
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-slate-500 hover:text-amber-400"
+                            }`}
+                          />
+                        </button>
+                      )}
 
                       {/* Actions menu */}
                       <div className="absolute right-10 top-1/2 -translate-y-1/2">

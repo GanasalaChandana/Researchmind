@@ -76,3 +76,7 @@ class WebhookRequest(BaseModel):
     url: str
     events: list[str] = ["completed", "failed"]
     secret: Optional[str] = None
+
+
+class FavoriteRequest(BaseModel):
+    is_favorite: bool

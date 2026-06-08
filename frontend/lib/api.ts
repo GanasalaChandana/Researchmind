@@ -52,3 +52,16 @@ export async function retryResearch(sessionId: string): Promise<{ session_id: st
   if (!res.ok) throw new Error("Failed to retry");
   return res.json();
 }
+
+export async function toggleFavorite(sessionId: string, isFavorite: boolean): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/research/${sessionId}/favorite`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ is_favorite: isFavorite }),
+  });
+  if (!res.ok) throw new Error("Failed to update favorite");
+}

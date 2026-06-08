@@ -40,6 +40,10 @@ def _reset_state():
     ):
         store.clear()
     rate_limit._hits.clear()
+
+    # Clear the in-memory research-session store too
+    from app import main
+    main._mem.clear()
     yield
 
 
