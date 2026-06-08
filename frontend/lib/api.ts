@@ -129,7 +129,7 @@ export async function getDashboardStats(): Promise<any> {
   const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`/api/research/dashboard`, { headers });
+  const res = await fetch(`/api/research/analytics`, { headers });
   if (!res.ok) throw new Error("Failed to fetch dashboard stats");
   const data = await res.json();
   return data.data || {};
