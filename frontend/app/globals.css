@@ -28,9 +28,10 @@ body {
   transition: background-color 0.3s, color 0.3s;
 }
 
-/* Prevent horizontal scroll without blocking vertical */
-html { overflow-x: clip; }
-body { overflow-x: clip; }
+/* Prevent horizontal scroll without blocking vertical
+   NOTE: never use overflow-x: hidden on html/body — kills vertical scroll in Chrome */
+html, body { overflow-y: auto; }
+body > div { overflow-x: hidden; }
 
 /* Better touch targets on mobile */
 button { min-height: 36px; }

@@ -433,8 +433,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* History */}
-        {sessions.length > 0 && (
+        {/* History — always shown when authenticated */}
+        {isAuthenticated && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -624,7 +624,9 @@ export default function HomePage() {
                     animate={{ opacity: 1 }}
                     className="text-center py-8 text-slate-500 text-sm"
                   >
-                    No research sessions match your search
+                    {totalSessions === 0
+                      ? "No research sessions yet — start one above!"
+                      : "No research sessions match your search"}
                   </motion.div>
                 ) : (
                   filteredSessions.map((s) => (
