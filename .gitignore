@@ -23,3 +23,7 @@ frontend/out/
 # Misc
 .DS_Store
 *.log
+
+# TS build artifact
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
