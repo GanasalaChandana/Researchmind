@@ -124,6 +124,63 @@ export async function getUserTags(): Promise<string[]> {
   return data.tags || [];
 }
 
+// ─── Collections ─────────────────────────────────────────────────────────────
+
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  session_count: number;
+  created_at: string;
+}
+
+function _authHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function listCollections(): Promise<Collection[]> {
+  const res = await fetch("/api/collections", {
+    headers: _authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.collections ?? [];
+}
+
+export async function createCollection(
+  name: string,
+  color = "indigo"
+): Promise<Collection | null> {
+  const res = await fetch("/api/collections", {
+    method: "POST",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, color }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await fetch(`/api/collections/${id}`, {
+    method: "DELETE",
+    headers: _authHeaders(),
+  });
+}
+
+export async function moveSessionToCollection(
+  sessionId: string,
+  collectionId: string | null
+): Promise<void> {
+  await fetch(`/api/research/${sessionId}/collection`, {
+    method: "PUT",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ collection_id: collectionId }),
+  });
+}
+
 export async function getDashboardStats(): Promise<any> {
   const headers: Record<string, string> = {};
   const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;

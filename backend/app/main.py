@@ -13,7 +13,14 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token, add_tag, remove_tag, list_user_tags, get_user_dashboard_stats
+from .database import (
+    init_db, create_session, update_session, get_session, list_sessions,
+    delete_session, get_cached_research, cache_research, set_favorite,
+    create_share_token, get_shared_session, list_share_tokens, delete_share_token,
+    add_tag, remove_tag, list_user_tags, get_user_dashboard_stats,
+    create_collection, list_collections, update_collection, delete_collection,
+    set_session_collection,
+)
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -162,6 +169,7 @@ async def get_sessions(
     offset: int = 0,
     favorites: bool = False,
     tag: str = None,
+    collection: str = None,
     current_user: dict = Depends(get_optional_user),
 ):
     """List sessions with pagination — filters to current user's sessions if authenticated"""
@@ -182,8 +190,9 @@ async def get_sessions(
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
     if tag:
-        # Filter by tag
         filtered = [s for s in filtered if any(t.get("name") == tag for t in (s.get("tags") or []))]
+    if collection:
+        filtered = [s for s in filtered if s.get("collection_id") == collection]
 
     total = len(filtered)
     # Paginate: offset-based pagination
@@ -685,3 +694,91 @@ async def revoke_share_link(session_id: str, share_token: str, user: dict = Depe
         raise HTTPException(status_code=404, detail="Share link not found")
 
     return {"success": True, "message": "Share link revoked"}
+
+
+# ─── Collections (named folders) ─────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel
+from typing import Optional as _Optional
+
+
+class CollectionCreate(_BaseModel):
+    name: str
+    description: _Optional[str] = None
+    color: str = "indigo"
+
+
+class CollectionUpdate(_BaseModel):
+    name: _Optional[str] = None
+    description: _Optional[str] = None
+    color: _Optional[str] = None
+
+
+class SessionCollectionAssign(_BaseModel):
+    collection_id: _Optional[str] = None
+
+
+@app.get("/collections")
+async def get_collections(current_user: dict = Depends(get_current_user)):
+    """List all collections for the authenticated user"""
+    cols = await list_collections(current_user["id"])
+    return {"collections": cols}
+
+
+@app.post("/collections")
+async def post_collection(
+    body: CollectionCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new collection"""
+    coll = await create_collection(
+        user_id=current_user["id"],
+        name=body.name,
+        description=body.description,
+        color=body.color,
+    )
+    if not coll:
+        raise HTTPException(status_code=500, detail="Failed to create collection")
+    return coll
+
+
+@app.patch("/collections/{collection_id}")
+async def patch_collection(
+    collection_id: str,
+    body: CollectionUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Rename or recolor a collection"""
+    coll = await update_collection(
+        collection_id=collection_id,
+        user_id=current_user["id"],
+        name=body.name,
+        description=body.description,
+        color=body.color,
+    )
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return coll
+
+
+@app.delete("/collections/{collection_id}")
+async def del_collection(
+    collection_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a collection (sessions are kept, just un-grouped)"""
+    ok = await delete_collection(collection_id, current_user["id"])
+    return {"ok": ok}
+
+
+@app.put("/research/{session_id}/collection")
+async def assign_collection(
+    session_id: str,
+    body: SessionCollectionAssign,
+    current_user: dict = Depends(get_current_user),
+):
+    """Move a session into (or out of) a collection"""
+    session = await set_session_collection(session_id, body.collection_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session

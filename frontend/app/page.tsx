@@ -1,13 +1,19 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { startResearch, deleteResearch, retryResearch, toggleFavorite, addTag, removeTag, getUserTags } from "@/lib/api";
+import {
+  startResearch, deleteResearch, retryResearch, toggleFavorite,
+  addTag, removeTag, getUserTags,
+  listCollections, createCollection, deleteCollection, moveSessionToCollection,
+  type Collection,
+} from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, ChevronRight, Clock,
   CheckCircle2, XCircle, Loader2, Filter,
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
-  SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3
+  SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3,
+  FolderOpen, Plus, Check, FolderPlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -37,7 +43,19 @@ interface SessionSummary {
   created_at: string;
   is_favorite?: boolean;
   tags?: SessionTag[];
+  collection_id?: string | null;
 }
+
+const COLLECTION_COLORS = ["indigo", "emerald", "amber", "rose", "violet", "sky"] as const;
+
+const COLOR_MAP: Record<string, { pill: string; dot: string }> = {
+  indigo:  { pill: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25",  dot: "bg-indigo-400" },
+  emerald: { pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25", dot: "bg-emerald-400" },
+  amber:   { pill: "bg-amber-500/15 text-amber-400 border-amber-500/25",   dot: "bg-amber-400" },
+  rose:    { pill: "bg-rose-500/15 text-rose-400 border-rose-500/25",     dot: "bg-rose-400" },
+  violet:  { pill: "bg-violet-500/15 text-violet-400 border-violet-500/25",  dot: "bg-violet-400" },
+  sky:     { pill: "bg-sky-500/15 text-sky-400 border-sky-500/25",       dot: "bg-sky-400" },
+};
 
 export default function HomePage() {
   const router = useRouter();
@@ -64,6 +82,13 @@ export default function HomePage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [showTagInput, setShowTagInput] = useState<string | null>(null);
+  // Collections
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [showCollectionPicker, setShowCollectionPicker] = useState<string | null>(null);
+  const [showNewCollection, setShowNewCollection] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [newCollectionColor, setNewCollectionColor] = useState<string>("indigo");
   const itemsPerPage = 10;
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
@@ -99,6 +124,7 @@ export default function HomePage() {
     if (historySearch) params.set("search", historySearch);
     if (daysFilter) params.set("days", String(daysFilter));
     if (selectedTag) params.set("tag", selectedTag);
+    if (selectedCollection) params.set("collection", selectedCollection);
 
     fetch(`/api/research/sessions?${params}`, { headers })
       .then((r) => r.json())
@@ -116,7 +142,7 @@ export default function HomePage() {
         }
       })
       .catch(() => {});
-  }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter, selectedTag]);
+  }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter, selectedTag, selectedCollection]);
 
   // Load user tags when authenticated
   useEffect(() => {
@@ -127,10 +153,20 @@ export default function HomePage() {
     getUserTags().then(setUserTags).catch(() => {});
   }, [isAuthenticated]);
 
+  // Load collections when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCollections([]);
+      setSelectedCollection(null);
+      return;
+    }
+    listCollections().then(setCollections).catch(() => {});
+  }, [isAuthenticated]);
+
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [historySearch, statusFilter, favoritesOnly, daysFilter, selectedTag]);
+  }, [historySearch, statusFilter, favoritesOnly, daysFilter, selectedTag, selectedCollection]);
 
   // Topic suggestions from history
   useEffect(() => {
@@ -205,11 +241,51 @@ export default function HomePage() {
     }
   }
 
+  async function handleCreateCollection() {
+    if (!newCollectionName.trim()) return;
+    const coll = await createCollection(newCollectionName.trim(), newCollectionColor);
+    if (coll) {
+      setCollections((prev) => [coll, ...prev]);
+      setNewCollectionName("");
+      setShowNewCollection(false);
+      toast.success(`Folder "${coll.name}" created`);
+    } else {
+      toast.error("Failed to create folder");
+    }
+  }
+
+  async function handleDeleteCollection(collectionId: string) {
+    await deleteCollection(collectionId);
+    setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+    if (selectedCollection === collectionId) setSelectedCollection(null);
+    // Refresh sessions so collection_id fields update
+    setCurrentPage(1);
+    toast.success("Folder deleted — sessions are still intact");
+  }
+
+  async function handleMoveToCollection(sessionId: string, collectionId: string | null) {
+    // Optimistic update
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, collection_id: collectionId } : s))
+    );
+    setShowCollectionPicker(null);
+    try {
+      await moveSessionToCollection(sessionId, collectionId);
+      // Refresh collection counts
+      const cols = await listCollections();
+      setCollections(cols);
+      toast.success(collectionId ? "Moved to folder" : "Removed from folder");
+    } catch {
+      toast.error("Failed to move session");
+    }
+  }
+
   const activeFilterCount = [
     statusFilter !== "all",
     daysFilter !== null,
     historySearch.trim() !== "",
     selectedTag !== null,
+    selectedCollection !== null,
   ].filter(Boolean).length;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -486,6 +562,134 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* Collections (folders) row */}
+            {collections.length > 0 && (
+              <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+                {/* "All" pill */}
+                <button
+                  onClick={() => setSelectedCollection(null)}
+                  className={`shrink-0 flex items-center gap-1 text-xs px-3 py-1 rounded-full transition-colors ${
+                    !selectedCollection
+                      ? "bg-brand-500 text-white"
+                      : "glass dark:text-slate-400 text-slate-600 hover:text-brand-500"
+                  }`}
+                >
+                  <FolderOpen className="w-3 h-3" /> All
+                </button>
+
+                {collections.map((c) => {
+                  const cs = COLOR_MAP[c.color] ?? COLOR_MAP.indigo;
+                  const isActive = selectedCollection === c.id;
+                  return (
+                    <div key={c.id} className="group/cpill relative shrink-0 flex items-center">
+                      <button
+                        onClick={() => setSelectedCollection(isActive ? null : c.id)}
+                        className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full border transition-colors ${
+                          isActive
+                            ? `${cs.pill} border-current font-medium`
+                            : "glass dark:text-slate-400 text-slate-600 hover:text-brand-500 border-transparent"
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${cs.dot} shrink-0`} />
+                        {c.name}
+                        <span className="text-[10px] opacity-50 ml-0.5">({c.session_count})</span>
+                      </button>
+                      {/* Delete folder — only shown on hover */}
+                      <button
+                        onClick={() => handleDeleteCollection(c.id)}
+                        title={`Delete folder "${c.name}"`}
+                        className="hidden group-hover/cpill:flex ml-0.5 items-center justify-center w-4 h-4 rounded-full hover:bg-red-500/20 hover:text-red-400 text-slate-500 transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* New folder button/form */}
+                {showNewCollection ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleCreateCollection(); }}
+                    className="shrink-0 flex items-center gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      value={newCollectionName}
+                      onChange={(e) => setNewCollectionName(e.target.value)}
+                      placeholder="Folder name…"
+                      className="w-28 text-xs dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200 rounded-lg px-2.5 py-1 dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50"
+                      autoFocus
+                    />
+                    {/* Color dots */}
+                    {COLLECTION_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNewCollectionColor(c)}
+                        className={`w-3 h-3 rounded-full ${COLOR_MAP[c].dot} shrink-0 transition-transform ${newCollectionColor === c ? "scale-125 ring-2 ring-offset-1 dark:ring-offset-slate-900 ring-offset-white ring-white/40" : ""}`}
+                      />
+                    ))}
+                    <button type="submit" className="shrink-0 text-xs px-2.5 py-1 bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-colors">
+                      Create
+                    </button>
+                    <button type="button" onClick={() => { setShowNewCollection(false); setNewCollectionName(""); }}
+                      className="shrink-0 p-1 hover:bg-white/10 rounded transition-colors">
+                      <X className="w-3 h-3 text-slate-400" />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => setShowNewCollection(true)}
+                    className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-full glass dark:text-slate-400 text-slate-600 hover:text-brand-400 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> New folder
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* When no collections exist yet — show a subtle create prompt */}
+            {collections.length === 0 && !showNewCollection && (
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => setShowNewCollection(true)}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-brand-400 transition-colors"
+                >
+                  <FolderPlus className="w-3 h-3" /> Create folder
+                </button>
+              </div>
+            )}
+            {collections.length === 0 && showNewCollection && (
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleCreateCollection(); }}
+                className="flex items-center gap-1.5 mb-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  value={newCollectionName}
+                  onChange={(e) => setNewCollectionName(e.target.value)}
+                  placeholder="Folder name…"
+                  className="flex-1 text-xs dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200 rounded-lg px-2.5 py-1 dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50"
+                  autoFocus
+                />
+                {COLLECTION_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNewCollectionColor(c)}
+                    className={`w-3 h-3 rounded-full ${COLOR_MAP[c].dot} shrink-0 transition-transform ${newCollectionColor === c ? "scale-125 ring-2 ring-offset-1 dark:ring-offset-slate-900 ring-offset-white ring-white/40" : ""}`}
+                  />
+                ))}
+                <button type="submit" className="shrink-0 text-xs px-2.5 py-1 bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-colors">
+                  Create
+                </button>
+                <button type="button" onClick={() => { setShowNewCollection(false); setNewCollectionName(""); }}
+                  className="shrink-0 p-1 hover:bg-white/10 rounded transition-colors">
+                  <X className="w-3 h-3 text-slate-400" />
+                </button>
+              </form>
+            )}
+
             {/* Search bar — always visible */}
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
@@ -606,7 +810,7 @@ export default function HomePage() {
                     {/* Reset */}
                     {activeFilterCount > 0 && (
                       <button
-                        onClick={() => { setStatusFilter("all"); setDaysFilter(null); setHistorySearch(""); setSelectedTag(null); }}
+                        onClick={() => { setStatusFilter("all"); setDaysFilter(null); setHistorySearch(""); setSelectedTag(null); setSelectedCollection(null); }}
                         className="text-xs text-red-400 hover:text-red-300 transition-colors"
                       >
                         ✕ Clear all filters
@@ -670,6 +874,19 @@ export default function HomePage() {
                             </span>
                             <span className="text-xs text-slate-500">{timeAgo(s.created_at)}</span>
 
+                            {/* Folder badge */}
+                            {s.collection_id && (() => {
+                              const coll = collections.find((c) => c.id === s.collection_id);
+                              if (!coll) return null;
+                              const cs = COLOR_MAP[coll.color] ?? COLOR_MAP.indigo;
+                              return (
+                                <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${cs.pill}`}>
+                                  <FolderOpen className="w-2.5 h-2.5" />
+                                  {coll.name}
+                                </span>
+                              );
+                            })()}
+
                             {/* Tags inline */}
                             {(Array.isArray(s.tags) ? s.tags : []).slice(0, 3).map((tag: any) => (
                               <button
@@ -728,6 +945,19 @@ export default function HomePage() {
                                 >
                                   <Tag className="w-3.5 h-3.5 text-brand-400" />
                                   Add tag
+                                </button>
+                              )}
+                              {isAuthenticated && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenu(null);
+                                    setShowCollectionPicker(showCollectionPicker === s.id ? null : s.id);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"
+                                >
+                                  <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
+                                  Move to folder
                                 </button>
                               )}
                               {s.status === "failed" && (
@@ -791,6 +1021,53 @@ export default function HomePage() {
                           >
                             <X className="w-4 h-4 text-slate-400" />
                           </button>
+                        </motion.div>
+                      )}
+
+                      {/* Collection picker */}
+                      {showCollectionPicker === s.id && isAuthenticated && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="glass rounded-xl p-3 mt-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+                            <FolderOpen className="w-3 h-3" /> Move to folder
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {s.collection_id && (
+                              <button
+                                onClick={() => handleMoveToCollection(s.id, null)}
+                                className="text-xs px-2.5 py-1 rounded-full glass text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors border border-transparent"
+                              >
+                                ✕ Remove from folder
+                              </button>
+                            )}
+                            {collections.length === 0 && (
+                              <p className="text-xs text-slate-500">No folders yet — create one above</p>
+                            )}
+                            {collections.map((c) => {
+                              const cs = COLOR_MAP[c.color] ?? COLOR_MAP.indigo;
+                              const isCurrent = s.collection_id === c.id;
+                              return (
+                                <button
+                                  key={c.id}
+                                  onClick={() => handleMoveToCollection(s.id, c.id)}
+                                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                    isCurrent
+                                      ? `${cs.pill} border-current font-medium`
+                                      : `glass ${cs.dot.replace("bg-", "text-")} border-transparent hover:border-current`
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${cs.dot} shrink-0`} />
+                                  {c.name}
+                                  {isCurrent && <Check className="w-2.5 h-2.5 ml-0.5" />}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </motion.div>
                       )}
 

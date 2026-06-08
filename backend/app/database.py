@@ -86,6 +86,21 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token)"
         )
 
+        # Collections — named folders for grouping sessions
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS collections (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                name        TEXT NOT NULL,
+                description TEXT,
+                color       TEXT NOT NULL DEFAULT 'indigo',
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS collection_id TEXT"
+        )
+
 
 async def create_session(session_id: str, topic: str, user_id: str = None):
     pool = await get_pool()
@@ -479,3 +494,126 @@ async def get_user_dashboard_stats(user_id: str) -> dict:
             "sessions_by_date": [],
             "status_breakdown": {},
         }
+
+
+# ---------------------------------------------------------------------------
+# Collections (named folders)
+# ---------------------------------------------------------------------------
+
+def _collection_row(row) -> dict:
+    d = dict(row)
+    if d.get("created_at"):
+        d["created_at"] = d["created_at"].isoformat()
+    # session_count comes from COUNT() and is already an int in asyncpg
+    return d
+
+
+async def create_collection(
+    user_id: str,
+    name: str,
+    description: Optional[str] = None,
+    color: str = "indigo",
+) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        coll_id = f"coll_{secrets.token_hex(8)}"
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """INSERT INTO collections (id, user_id, name, description, color)
+                   VALUES ($1, $2, $3, $4, $5) RETURNING *""",
+                coll_id, user_id, name.strip(), description, color,
+            )
+            return {**_collection_row(row), "session_count": 0} if row else None
+    except Exception as e:
+        print(f"Failed to create collection: {e}")
+        return None
+
+
+async def list_collections(user_id: str) -> list[dict]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT c.id, c.user_id, c.name, c.description, c.color, c.created_at,
+                          COUNT(s.id) AS session_count
+                   FROM collections c
+                   LEFT JOIN sessions s ON s.collection_id = c.id
+                   WHERE c.user_id = $1
+                   GROUP BY c.id
+                   ORDER BY c.created_at DESC""",
+                user_id,
+            )
+            return [_collection_row(r) for r in rows]
+    except Exception as e:
+        print(f"Failed to list collections: {e}")
+        return []
+
+
+async def update_collection(
+    collection_id: str,
+    user_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    color: Optional[str] = None,
+) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        updates: list[str] = []
+        params: list = []
+        if name is not None:
+            updates.append(f"name = ${len(params)+1}")
+            params.append(name.strip())
+        if description is not None:
+            updates.append(f"description = ${len(params)+1}")
+            params.append(description)
+        if color is not None:
+            updates.append(f"color = ${len(params)+1}")
+            params.append(color)
+        if not updates:
+            return None
+        params.extend([collection_id, user_id])
+        q = (
+            f"UPDATE collections SET {', '.join(updates)} "
+            f"WHERE id = ${len(params)-1} AND user_id = ${len(params)} RETURNING *"
+        )
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(q, *params)
+            return _collection_row(row) if row else None
+    except Exception as e:
+        print(f"Failed to update collection: {e}")
+        return None
+
+
+async def delete_collection(collection_id: str, user_id: str) -> bool:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            # Detach sessions first (don't delete them)
+            await conn.execute(
+                "UPDATE sessions SET collection_id = NULL WHERE collection_id = $1",
+                collection_id,
+            )
+            result = await conn.execute(
+                "DELETE FROM collections WHERE id = $1 AND user_id = $2",
+                collection_id, user_id,
+            )
+            return result == "DELETE 1"
+    except Exception as e:
+        print(f"Failed to delete collection: {e}")
+        return False
+
+
+async def set_session_collection(
+    session_id: str, collection_id: Optional[str]
+) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE sessions SET collection_id = $1 WHERE id = $2",
+                collection_id, session_id,
+            )
+            return await get_session(session_id)
+    except Exception as e:
+        print(f"Failed to set session collection: {e}")
+        return None
