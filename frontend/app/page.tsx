@@ -116,7 +116,7 @@ export default function HomePage() {
         }
       })
       .catch(() => {});
-  }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter]);
+  }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter, selectedTag]);
 
   // Load user tags when authenticated
   useEffect(() => {
