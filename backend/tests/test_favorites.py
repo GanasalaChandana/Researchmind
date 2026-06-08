@@ -18,7 +18,8 @@ def test_favorite_toggle_and_filter(client):
     sid = _start_session(client, headers)
 
     # Not favorited initially
-    favs = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs_resp = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs = favs_resp.get("items", []) if isinstance(favs_resp, dict) else favs_resp
     assert all(s["id"] != sid for s in favs)
 
     # Favorite it
@@ -27,12 +28,14 @@ def test_favorite_toggle_and_filter(client):
     assert r.json()["is_favorite"] is True
 
     # Now shows up in the favorites filter
-    favs = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs_resp = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs = favs_resp.get("items", []) if isinstance(favs_resp, dict) else favs_resp
     assert any(s["id"] == sid for s in favs)
 
     # Unfavorite → gone from favorites
     client.post(f"/research/{sid}/favorite", json={"is_favorite": False}, headers=headers)
-    favs = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs_resp = client.get("/research/sessions/list?favorites=true", headers=headers).json()
+    favs = favs_resp.get("items", []) if isinstance(favs_resp, dict) else favs_resp
     assert all(s["id"] != sid for s in favs)
 
 
