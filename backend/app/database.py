@@ -382,3 +382,89 @@ async def list_user_tags(user_id: str) -> list[str]:
             return sorted(list(tag_names))
     except Exception:
         return []
+
+
+async def get_user_dashboard_stats(user_id: str) -> dict:
+    """Get dashboard analytics for a user."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            # Basic stats
+            total = await conn.fetchval(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = $1",
+                user_id,
+            )
+
+            completed = await conn.fetchval(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'completed'",
+                user_id,
+            )
+
+            failed = await conn.fetchval(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'failed'",
+                user_id,
+            )
+
+            running = await conn.fetchval(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'running'",
+                user_id,
+            )
+
+            favorites = await conn.fetchval(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND is_favorite = TRUE",
+                user_id,
+            )
+
+            # Top topics
+            top_topics = await conn.fetch(
+                """SELECT topic, COUNT(*) as count
+                   FROM sessions WHERE user_id = $1
+                   GROUP BY topic ORDER BY count DESC LIMIT 5""",
+                user_id,
+            )
+
+            # Sessions by date (last 30 days)
+            sessions_by_date = await conn.fetch(
+                """SELECT DATE(created_at) as date, COUNT(*) as count,
+                   SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+                   FROM sessions WHERE user_id = $1 AND created_at > NOW() - INTERVAL '30 days'
+                   GROUP BY DATE(created_at) ORDER BY date""",
+                user_id,
+            )
+
+            # Average depth (if stored, use 3 as default for now)
+            avg_depth = 3  # Can enhance later if depth is stored
+
+            # Status breakdown
+            status_data = {
+                "completed": completed,
+                "failed": failed,
+                "running": running,
+            }
+
+            return {
+                "total": total,
+                "completed": completed,
+                "failed": failed,
+                "running": running,
+                "favorites": favorites,
+                "success_rate": round((completed / total * 100) if total > 0 else 0, 1),
+                "avg_depth": avg_depth,
+                "top_topics": [dict(r) for r in top_topics],
+                "sessions_by_date": [dict(r) for r in sessions_by_date],
+                "status_breakdown": status_data,
+            }
+    except Exception as e:
+        print(f"Failed to get dashboard stats: {e}")
+        return {
+            "total": 0,
+            "completed": 0,
+            "failed": 0,
+            "running": 0,
+            "favorites": 0,
+            "success_rate": 0,
+            "avg_depth": 3,
+            "top_topics": [],
+            "sessions_by_date": [],
+            "status_breakdown": {},
+        }

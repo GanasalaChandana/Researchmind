@@ -13,7 +13,7 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token, add_tag, remove_tag, list_user_tags
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token, add_tag, remove_tag, list_user_tags, get_user_dashboard_stats
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -260,6 +260,13 @@ async def get_user_tags(current_user: dict = Depends(get_current_user)):
     """List all tags for the current user"""
     tags = await list_user_tags(current_user["id"])
     return {"tags": tags}
+
+
+@app.get("/research/dashboard/stats")
+async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    """Get analytics dashboard for the current user"""
+    stats = await get_user_dashboard_stats(current_user["id"])
+    return {"success": True, "data": stats}
 
 
 @app.get("/research/{session_id}/report")

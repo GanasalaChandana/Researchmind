@@ -7,7 +7,7 @@ import {
   Search, Sparkles, ChevronRight, Clock,
   CheckCircle2, XCircle, Loader2, Filter,
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
-  SortAsc, SortDesc, Calendar, Tag, X, Star
+  SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -302,6 +302,17 @@ export default function HomePage() {
           >
             <LogIn className="w-3.5 h-3.5" />
             Sign in
+          </button>
+        )}
+        {isAuthenticated && (
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                       text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="View analytics dashboard"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Dashboard</span>
           </button>
         )}
         <ThemeToggle />

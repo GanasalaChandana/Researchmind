@@ -123,3 +123,14 @@ export async function getUserTags(): Promise<string[]> {
   const data = await res.json();
   return data.tags || [];
 }
+
+export async function getDashboardStats(): Promise<any> {
+  const headers: Record<string, string> = {};
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/research/dashboard`, { headers });
+  if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+  const data = await res.json();
+  return data.data || {};
+}
