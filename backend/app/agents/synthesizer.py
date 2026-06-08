@@ -1,10 +1,10 @@
 import json
 import re
 import asyncio
-from anthropic import Anthropic
+from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
-from ..config import ANTHROPIC_API_KEY
+from ..config import GROQ_API_KEY
 
 
 async def synthesize(
@@ -13,7 +13,7 @@ async def synthesize(
     sources: list[Source],
     sub_questions: list[str],
 ) -> AsyncGenerator[tuple[AgentEvent, ResearchReport | None], None]:
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = Groq(api_key=GROQ_API_KEY)
 
     yield AgentEvent(
         type="synthesizing",
@@ -46,14 +46,13 @@ Return a JSON object:
 Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown."""
 
-    # Call Claude for knowledge graph extraction
-    kg_response = client.messages.create(
-        model="claude-opus-4-1",
+    kg_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         max_tokens=2000,
         messages=[{"role": "user", "content": kg_prompt}],
     )
 
-    kg_raw = kg_response.content[0].text.strip()
+    kg_raw = kg_response.choices[0].message.content.strip()
     try:
         kg_data = json.loads(kg_raw)
     except json.JSONDecodeError:
@@ -101,14 +100,13 @@ Return a JSON object:
 
 Write 4-5 sections. Return only valid JSON, no markdown fences."""
 
-    # Call Claude for report generation
-    report_response = client.messages.create(
-        model="claude-opus-4-1",
+    report_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         max_tokens=3000,
         messages=[{"role": "user", "content": report_prompt}],
     )
 
-    report_raw = report_response.content[0].text.strip()
+    report_raw = report_response.choices[0].message.content.strip()
     try:
         report_data = json.loads(report_raw)
     except json.JSONDecodeError:

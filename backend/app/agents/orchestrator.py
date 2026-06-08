@@ -1,14 +1,14 @@
 import json
 import re
 import asyncio
-from anthropic import Anthropic
+from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent
-from ..config import ANTHROPIC_API_KEY
+from ..config import GROQ_API_KEY
 
 
 async def orchestrate(topic: str, depth: int) -> AsyncGenerator[AgentEvent, None]:
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = Groq(api_key=GROQ_API_KEY)
 
     yield AgentEvent(
         type="thinking",
@@ -28,14 +28,13 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    # Call Claude API (much more reliable than Groq free tier)
-    response = client.messages.create(
-        model="claude-opus-4-1",
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = response.content[0].text.strip()
+    raw = response.choices[0].message.content.strip()
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:

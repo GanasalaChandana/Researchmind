@@ -6,7 +6,6 @@ import os
 _env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path, override=True, encoding="utf-8-sig")
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "researchmind-change-in-production")
@@ -17,9 +16,9 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "ResearchMind <onboarding@resend.dev>")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://researchmind-app.vercel.app")
 
-if not ANTHROPIC_API_KEY:
+if not GROQ_API_KEY:
     raise RuntimeError(
-        f"ANTHROPIC_API_KEY not found. Expected .env at: {_env_path}\n"
+        f"GROQ_API_KEY not found. Expected .env at: {_env_path}\n"
         f"File exists: {_env_path.exists()}"
     )
 
