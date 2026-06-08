@@ -166,12 +166,9 @@ async def get_sessions(
 ):
     """List sessions with pagination — filters to current user's sessions if authenticated"""
     user_id = current_user["id"] if current_user else None
-    print(f"[sessions/list] user_id={user_id} offset={offset} limit={limit}")
     try:
         sessions = await _list(user_id=user_id, favorites_only=favorites)
-        print(f"[sessions/list] DB returned {len(sessions)} rows")
-    except Exception as e:
-        print(f"[sessions/list] ERROR: {e}")
+    except Exception:
         sessions = []
 
     # Apply additional filters

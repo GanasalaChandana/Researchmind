@@ -274,9 +274,10 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start px-4 py-12">
-      {/* Top-right: Auth + Theme */}
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12">
+      {/* Top bar: Auth + Theme — fixed so it stays visible on scroll */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-3 backdrop-blur-sm dark:bg-slate-950/70 bg-white/70 border-b dark:border-white/5 border-slate-200/60">
+        <div className="flex items-center gap-2">
         {isAuthenticated ? (
           <div className="flex items-center gap-2">
             <span className="hidden sm:flex items-center gap-1.5 text-xs dark:text-slate-400 text-slate-600">
@@ -316,7 +317,8 @@ export default function HomePage() {
           </button>
         )}
         <ThemeToggle />
-      </div>
+        </div>
+      </header>
 
       {/* Auth Modal */}
       <AnimatePresence>
@@ -336,11 +338,11 @@ export default function HomePage() {
         onClick={() => { setOpenMenu(null); setShowSuggestions(false); }}
       >
         {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 mb-4">
-            <Sparkles className="w-7 h-7 text-brand-500" />
+        <div className="text-center mb-6 sm:mb-10">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 mb-3 sm:mb-4">
+            <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-brand-500" />
           </div>
-          <h1 className="text-4xl font-bold dark:text-white text-slate-900 mb-2">ResearchMind</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold dark:text-white text-slate-900 mb-2">ResearchMind</h1>
           <p className="dark:text-slate-400 text-slate-600 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
         </div>
 
@@ -442,7 +444,7 @@ export default function HomePage() {
             className="mt-10"
           >
             {/* History header */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-500" />
                 <h2 className="text-sm font-medium dark:text-slate-400 text-slate-700">

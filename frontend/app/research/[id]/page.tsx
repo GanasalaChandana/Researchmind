@@ -167,9 +167,9 @@ export default function ResearchSessionPage() {
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               {status === "running"   && <Loader2 className="w-4 h-4 text-brand-500 animate-spin" />}
               {status === "completed" && <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />}
               {status === "failed"    && <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />}
@@ -181,7 +181,7 @@ export default function ResearchSessionPage() {
                 </>
               )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white">
+            <h1 className="text-xl sm:text-2xl font-bold text-white break-words">
               {topic || report?.topic || "Research Session"}
             </h1>
           </div>
@@ -192,10 +192,10 @@ export default function ResearchSessionPage() {
             className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-slate-300 hover:text-white disabled:opacity-50 transition-colors shrink-0"
           >
             {shareLinking
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Creating...</span></>
               : copied
-              ? <><Check className="w-4 h-4 text-emerald-400" /> Copied!</>
-              : <><Share2 className="w-4 h-4" /> Share</>
+              ? <><Check className="w-4 h-4 text-emerald-400" /> <span className="hidden sm:inline">Copied!</span></>
+              : <><Share2 className="w-4 h-4" /> <span className="hidden sm:inline">Share</span></>
             }
           </button>
         </div>

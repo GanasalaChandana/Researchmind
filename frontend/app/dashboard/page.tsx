@@ -112,7 +112,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <StatCard label="Total Sessions" value={stats.total} icon={BarChart3}
           color="dark:bg-white/[0.03] bg-white border-slate-200 dark:border-white/8 dark:text-white text-slate-800"
           delay={0} />
