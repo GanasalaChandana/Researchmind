@@ -497,6 +497,39 @@ async def get_user_dashboard_stats(user_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Full-text search across report content
+# ---------------------------------------------------------------------------
+
+async def search_sessions_full(
+    user_id: str,
+    query: str,
+    limit: int = 30,
+) -> list[dict]:
+    """Search topic AND report JSONB content for *query* (completed sessions only)."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT * FROM sessions
+                   WHERE user_id = $1
+                     AND status = 'completed'
+                     AND (
+                       topic ILIKE $2
+                       OR (report IS NOT NULL AND report::text ILIKE $2)
+                     )
+                   ORDER BY created_at DESC
+                   LIMIT $3""",
+                user_id,
+                f"%{query}%",
+                limit,
+            )
+            return [_row_to_dict(r) for r in rows]
+    except Exception as e:
+        print(f"Full-text search failed: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Collections (named folders)
 # ---------------------------------------------------------------------------
 

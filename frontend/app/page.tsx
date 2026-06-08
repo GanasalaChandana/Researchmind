@@ -5,7 +5,8 @@ import {
   startResearch, deleteResearch, retryResearch, toggleFavorite,
   addTag, removeTag, getUserTags,
   listCollections, createCollection, deleteCollection, moveSessionToCollection,
-  type Collection,
+  searchReportContent,
+  type Collection, type SearchResult,
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -82,6 +83,9 @@ export default function HomePage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [showTagInput, setShowTagInput] = useState<string | null>(null);
+  // Content search
+  const [contentResults, setContentResults] = useState<SearchResult[]>([]);
+  const [contentSearching, setContentSearching] = useState(false);
   // Collections
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
@@ -167,6 +171,27 @@ export default function HomePage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [historySearch, statusFilter, favoritesOnly, daysFilter, selectedTag, selectedCollection]);
+
+  // Debounced full-text content search (fires 400 ms after typing stops)
+  useEffect(() => {
+    const trimmed = historySearch.trim();
+    if (!trimmed || trimmed.length < 2 || !isAuthenticated) {
+      setContentResults([]);
+      setContentSearching(false);
+      return;
+    }
+    setContentSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await searchReportContent(trimmed);
+      // Only show sessions NOT already visible in the topic-match list
+      const topicIds = new Set(sessions.map((s) => s.id));
+      setContentResults(results.filter((r) => !topicIds.has(r.id)));
+      setContentSearching(false);
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [historySearch, isAuthenticated, sessions]);
 
   // Topic suggestions from history
   useEffect(() => {
@@ -1097,6 +1122,59 @@ export default function HomePage() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* ── Found in report content ─────────────────────────────── */}
+            {(contentSearching || contentResults.length > 0) && (
+              <div className="mt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-medium dark:text-slate-400 text-slate-600">
+                    📄 Also found in reports
+                  </span>
+                  {contentSearching
+                    ? <Loader2 className="w-3 h-3 animate-spin text-brand-400" />
+                    : <span className="text-xs dark:bg-white/10 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full">{contentResults.length}</span>
+                  }
+                </div>
+                {!contentSearching && (
+                  <div className="space-y-2">
+                    {contentResults.map((r) => (
+                      <motion.div
+                        key={r.id}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="relative group"
+                      >
+                        <div
+                          onClick={() => router.push(`/research/${r.id}?topic=${encodeURIComponent(r.topic)}&depth=3`)}
+                          className="rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.06] hover:bg-slate-50 hover:border-indigo-400/40 dark:hover:border-indigo-500/30 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-md"
+                        >
+                          {/* Left accent — indigo always for content matches */}
+                          <div className="absolute inset-y-0 left-0 w-[3px] rounded-l-2xl bg-brand-500/60" />
+                          <div className="pl-5 pr-10 py-4">
+                            <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-1.5 line-clamp-1">
+                              {r.topic}
+                            </h3>
+                            {/* Snippet */}
+                            {r.snippet && (
+                              <p className="text-xs dark:text-slate-400 text-slate-500 line-clamp-2 leading-relaxed mb-1.5">
+                                …{r.snippet}…
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                                Found in: {r.match_in}
+                              </span>
+                              <span className="text-xs text-slate-500">{timeAgo(r.created_at)}</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Pagination */}
             {totalSessions > itemsPerPage && (

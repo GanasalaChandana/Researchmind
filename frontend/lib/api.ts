@@ -181,6 +181,35 @@ export async function moveSessionToCollection(
   });
 }
 
+// ─── Full-text content search ─────────────────────────────────────────────────
+
+export interface SearchResult {
+  id: string;
+  topic: string;
+  status: string;
+  created_at: string;
+  snippet: string;
+  match_in: string;
+  tags?: string[];
+  collection_id?: string | null;
+}
+
+export async function searchReportContent(query: string): Promise<SearchResult[]> {
+  if (!query || query.trim().length < 2) return [];
+  const headers = _authHeaders();
+  try {
+    const res = await fetch(
+      `/api/research/search?q=${encodeURIComponent(query.trim())}`,
+      { headers, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getDashboardStats(): Promise<any> {
   const headers: Record<string, string> = {};
   const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;

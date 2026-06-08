@@ -19,7 +19,7 @@ from .database import (
     create_share_token, get_shared_session, list_share_tokens, delete_share_token,
     add_tag, remove_tag, list_user_tags, get_user_dashboard_stats,
     create_collection, list_collections, update_collection, delete_collection,
-    set_session_collection,
+    set_session_collection, search_sessions_full,
 )
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
@@ -146,7 +146,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.6.0-collections"}
+    return {"status": "ok", "version": "3.7.0-search"}
 
 
 @app.post("/research/start")
@@ -209,6 +209,67 @@ async def get_sessions(
         "limit": limit,
         "has_more": offset + limit < total,
     }
+
+
+# ─── Full-text report search ─────────────────────────────────────────────────
+
+def _extract_snippet(report: dict, query: str, ctx: int = 130) -> tuple[str, str]:
+    """Return (snippet_text, match_location) from a report dict."""
+    q = query.lower()
+
+    # Executive summary
+    summary = report.get("summary", "")
+    if q in summary.lower():
+        idx = summary.lower().find(q)
+        s, e = max(0, idx - 60), min(len(summary), idx + len(query) + 60)
+        snip = ("…" if s > 0 else "") + summary[s:e] + ("…" if e < len(summary) else "")
+        return snip, "Executive Summary"
+
+    # Body sections
+    for section in report.get("sections", []):
+        heading = section.get("heading", "")
+        content = section.get("content", "")
+        for text, loc in [(heading, f"Section: {heading}"), (content, f"Section: {heading}")]:
+            if q in text.lower():
+                idx = text.lower().find(q)
+                s, e = max(0, idx - 60), min(len(text), idx + len(query) + 60)
+                snip = ("…" if s > 0 else "") + text[s:e] + ("…" if e < len(text) else "")
+                return snip, loc
+
+    # Sources
+    for source in report.get("sources", []):
+        title = source.get("title", "")
+        if q in title.lower():
+            return title, "Sources"
+
+    return "", "content"
+
+
+@app.get("/research/search")
+async def full_text_search(
+    q: str = Query(..., min_length=2),
+    current_user: dict = Depends(get_current_user),
+):
+    """Full-text search across session topics AND report content (completed sessions only)."""
+    query = q.strip()
+    sessions = await search_sessions_full(user_id=current_user["id"], query=query)
+
+    results = []
+    for s in sessions:
+        report = s.get("report") or {}
+        snippet, match_in = ("", "topic")
+        # Only extract snippet for non-topic matches
+        if query.lower() not in s.get("topic", "").lower():
+            snippet, match_in = _extract_snippet(report, query)
+        else:
+            match_in = "topic"
+
+        row = {k: v for k, v in s.items() if k != "report"}
+        row["snippet"]  = snippet
+        row["match_in"] = match_in
+        results.append(row)
+
+    return {"results": results, "query": query, "total": len(results)}
 
 
 @app.post("/research/{session_id}/favorite")
