@@ -1,14 +1,15 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { streamResearch } from "@/lib/api";
+import { streamResearch, createShareLink } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
 import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import ResearchProgress, { Phase } from "@/components/ResearchProgress";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
-import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft } from "lucide-react";
+import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
+import toast from "react-hot-toast";
 
 type Tab = "agents" | "graph" | "report";
 
@@ -35,6 +36,9 @@ export default function ResearchSessionPage() {
   const [phase, setPhase] = useState<Phase>("orchestrating");
   const [copied, setCopied] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareLinking, setShareLinking] = useState(false);
   const completedRef = useRef(false);
 
   useEffect(() => {
@@ -107,8 +111,27 @@ export default function ResearchSessionPage() {
   }, [sessionId]);
 
   async function handleShare() {
-    const url = `${window.location.origin}/research/${sessionId}?topic=${encodeURIComponent(topic)}&depth=${depth}`;
-    await navigator.clipboard.writeText(url);
+    if (shareToken) {
+      setShowShareModal(true);
+      return;
+    }
+
+    setShareLinking(true);
+    try {
+      const { token } = await createShareLink(sessionId);
+      setShareToken(token);
+      setShowShareModal(true);
+    } catch (error) {
+      toast.error("Failed to create share link");
+    } finally {
+      setShareLinking(false);
+    }
+  }
+
+  async function copyShareLink() {
+    if (!shareToken) return;
+    const shareUrl = `${window.location.origin}/shared/${shareToken}`;
+    await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -165,9 +188,12 @@ export default function ResearchSessionPage() {
 
           <button
             onClick={handleShare}
-            className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-slate-300 hover:text-white transition-colors shrink-0"
+            disabled={shareLinking}
+            className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-slate-300 hover:text-white disabled:opacity-50 transition-colors shrink-0"
           >
-            {copied
+            {shareLinking
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+              : copied
               ? <><Check className="w-4 h-4 text-emerald-400" /> Copied!</>
               : <><Share2 className="w-4 h-4" /> Share</>
             }
@@ -245,6 +271,60 @@ export default function ResearchSessionPage() {
               Report will appear when research is complete
             </div>
           )
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && shareToken && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Share Research</h3>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-400 mb-4">
+              Share this research with anyone. They'll be able to view the full report and knowledge graph.
+            </p>
+
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
+              <p className="text-xs text-slate-500 mb-2">Share Link</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={`${window.location.origin}/shared/${shareToken}`}
+                  readOnly
+                  className="flex-1 bg-slate-800/50 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none"
+                />
+                <button
+                  onClick={copyShareLink}
+                  className="flex items-center gap-2 px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded transition-colors"
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-4">
+              Link expires in 30 days
+            </p>
+
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

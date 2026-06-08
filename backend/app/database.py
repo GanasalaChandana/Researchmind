@@ -1,7 +1,9 @@
 import asyncpg
 import os
 import json
+import secrets
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 
 
 _pool: Optional[asyncpg.Pool] = None
@@ -65,6 +67,21 @@ async def init_db():
                 cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS share_tokens (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                token TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL,
+                created_by TEXT
+            )
+        """)
+        # Create index for token lookup
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token)"
+        )
 
 
 async def create_session(session_id: str, topic: str, user_id: str = None):
@@ -203,3 +220,77 @@ def _row_to_dict(row) -> dict:
     if d.get("created_at"):
         d["created_at"] = d["created_at"].isoformat()
     return d
+
+
+async def create_share_token(session_id: str, user_id: str = None, expires_in_days: int = 30) -> Optional[dict]:
+    """Create a share token for a session. Returns token details or None if failed."""
+    try:
+        pool = await get_pool()
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+
+        async with pool.acquire() as conn:
+            token_id = secrets.token_hex(8)
+            await conn.execute(
+                """INSERT INTO share_tokens (id, session_id, token, expires_at, created_by)
+                   VALUES ($1, $2, $3, $4, $5)""",
+                token_id, session_id, token, expires_at, user_id
+            )
+            return {
+                "token": token,
+                "session_id": session_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": expires_at.isoformat(),
+            }
+    except Exception as e:
+        print(f"Failed to create share token: {e}")
+        return None
+
+
+async def get_shared_session(token: str) -> Optional[dict]:
+    """Validate share token and return session if valid (not expired)."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """SELECT s.* FROM sessions s
+                   INNER JOIN share_tokens st ON s.id = st.session_id
+                   WHERE st.token = $1 AND st.expires_at > NOW()""",
+                token
+            )
+            if row:
+                return _row_to_dict(row)
+    except Exception as e:
+        print(f"Failed to validate share token: {e}")
+    return None
+
+
+async def list_share_tokens(session_id: str) -> list[dict]:
+    """List all active share tokens for a session."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, session_id, token, created_at, expires_at
+                   FROM share_tokens
+                   WHERE session_id = $1 AND expires_at > NOW()
+                   ORDER BY created_at DESC""",
+                session_id
+            )
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+async def delete_share_token(token: str) -> bool:
+    """Delete a share token."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM share_tokens WHERE token = $1",
+                token
+            )
+            return result == "DELETE 1"
+    except Exception:
+        return False

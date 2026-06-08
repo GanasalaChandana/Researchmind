@@ -13,7 +13,7 @@ from .agents.orchestrator import orchestrate
 from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
-from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite
+from .database import init_db, create_session, update_session, get_session, list_sessions, delete_session, get_cached_research, cache_research, set_favorite, create_share_token, get_shared_session, list_share_tokens, delete_share_token
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -474,20 +474,25 @@ async def get_citations(session_id: str, style: str = "apa"):
 
 
 @app.post("/research/{session_id}/share")
-async def create_share_link(session_id: str):
+async def create_share_link(session_id: str, user: dict = Depends(get_optional_user)):
     """Create a shareable link for the research"""
     session = await _get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Generate a simple share token (in production, use more secure tokens)
-    share_token = str(uuid.uuid4())[:8].upper()
+    user_id = user.get("user_id") if user else None
+    token_info = await create_share_token(session_id, user_id=user_id, expires_in_days=30)
+
+    if not token_info:
+        raise HTTPException(status_code=500, detail="Failed to create share token")
 
     return {
+        "success": True,
         "session_id": session_id,
-        "share_token": share_token,
-        "share_url": f"/shared/{share_token}",
-        "expires_in": "30 days",
+        "token": token_info["token"],
+        "share_url": f"/api/research/shared/{token_info['token']}",
+        "public_url": f"https://{token_info['token']}",
+        "expires_at": token_info["expires_at"],
     }
 
 
@@ -557,14 +562,57 @@ async def test_webhook(session_id: str):
 
 # ─── Shared Research ─────────────────────────────────────────────────────────
 
-@app.get("/shared/{share_token}")
+@app.get("/research/shared/{share_token}")
 async def get_shared_research(share_token: str):
-    """Access shared research (simplified - in production add token validation)"""
-    # For now, this is a placeholder. In production:
-    # 1. Store share tokens in database with expiry
-    # 2. Link tokens to session IDs
-    # 3. Validate token before returning data
+    """Access shared research via token. Returns research if token is valid and not expired."""
+    session = await get_shared_session(share_token)
+    if not session:
+        raise HTTPException(status_code=404, detail="Share link expired or invalid")
+
     return {
-        "message": "Shared research endpoint. Implement token validation in production.",
-        "token": share_token,
+        "success": True,
+        "id": session["id"],
+        "topic": session["topic"],
+        "status": session["status"],
+        "created_at": session["created_at"],
+        "report": session.get("report"),
+        "knowledge_graph": session.get("report", {}).get("knowledge_graph", {"entities": [], "relationships": []}),
     }
+
+
+@app.get("/research/{session_id}/shares")
+async def get_session_shares(session_id: str, user: dict = Depends(get_optional_user)):
+    """List all active share tokens for a session (only owner can view)"""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check authorization: must be owner
+    if user and session.get("user_id") != user.get("user_id"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    tokens = await list_share_tokens(session_id)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "shares": tokens,
+        "count": len(tokens),
+    }
+
+
+@app.delete("/research/{session_id}/shares/{share_token}")
+async def revoke_share_link(session_id: str, share_token: str, user: dict = Depends(get_optional_user)):
+    """Revoke a share token"""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check authorization
+    if user and session.get("user_id") != user.get("user_id"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    success = await delete_share_token(share_token)
+    if not success:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    return {"success": True, "message": "Share link revoked"}

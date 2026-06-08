@@ -65,3 +65,23 @@ export async function toggleFavorite(sessionId: string, isFavorite: boolean): Pr
   });
   if (!res.ok) throw new Error("Failed to update favorite");
 }
+
+export async function createShareLink(sessionId: string): Promise<{ token: string; share_url: string; expires_at: string }> {
+  const headers: Record<string, string> = {};
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/research/${sessionId}/share`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) throw new Error("Failed to create share link");
+  const data = await res.json();
+  return data;
+}
+
+export async function getSharedResearch(shareToken: string) {
+  const res = await fetch(`${BACKEND}/research/shared/${shareToken}`);
+  if (!res.ok) throw new Error("Share link expired or invalid");
+  return res.json();
+}
