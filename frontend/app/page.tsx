@@ -52,6 +52,9 @@ export default function HomePage() {
   const [customPrompts, setCustomPrompts] = useState<string[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [resetToken, setResetToken] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const itemsPerPage = 10;
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
 
@@ -76,20 +79,38 @@ export default function HomePage() {
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    fetch("/api/research/sessions", { headers })
+    const offset = (currentPage - 1) * itemsPerPage;
+    const params = new URLSearchParams({
+      offset: String(offset),
+      limit: String(itemsPerPage),
+      status: statusFilter === "all" ? "" : statusFilter,
+      favorites: String(favoritesOnly),
+      search: historySearch,
+      days: daysFilter ? String(daysFilter) : "",
+    });
+
+    fetch(`/api/research/sessions?${params}`, { headers })
       .then((r) => r.json())
-      .then((data: SessionSummary[]) => {
+      .then((data: any) => {
         if (token) {
           // Authenticated: server already filtered to this user's sessions
-          setSessions(data);
+          setSessions(data.items || []);
+          setTotalSessions(data.total || 0);
         } else {
           // Unauthenticated: filter by localStorage IDs
-          const mine = data.filter((s) => localIds.includes(s.id));
-          setSessions(mine);
+          const items = (data.items || []).filter((s: any) => localIds.includes(s.id));
+          setSessions(items);
+          // For unauthenticated, show only local sessions count
+          setTotalSessions(localIds.length);
         }
       })
       .catch(() => {});
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [historySearch, statusFilter, favoritesOnly, daysFilter]);
 
   // Topic suggestions from history
   useEffect(() => {
@@ -108,27 +129,15 @@ export default function HomePage() {
     setShowSuggestions(matches.length > 0);
   }, [topic, sessions]);
 
+  // Sort the sessions (already filtered/paginated by backend)
   const filteredSessions = useMemo(() => {
-    let result = sessions.filter((s) => {
-      const matchTopic = s.topic.toLowerCase().includes(historySearch.toLowerCase());
-      const matchStatus = statusFilter === "all" || s.status === statusFilter;
-      const matchFavorite = !favoritesOnly || s.is_favorite;
-      let matchDate = true;
-      if (daysFilter) {
-        const cutoff = new Date(Date.now() - daysFilter * 24 * 60 * 60 * 1000);
-        matchDate = new Date(s.created_at) > cutoff;
-      }
-      return matchTopic && matchStatus && matchFavorite && matchDate;
-    });
-
-    // Sort
-    result = [...result].sort((a, b) => {
+    let result = [...sessions];
+    result.sort((a, b) => {
       const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       return sortOrder === "newest" ? -diff : diff;
     });
-
     return result;
-  }, [sessions, historySearch, statusFilter, favoritesOnly, daysFilter, sortOrder]);
+  }, [sessions, sortOrder]);
 
   async function handleToggleFavorite(s: SessionSummary) {
     if (!isAuthenticated) {
@@ -379,7 +388,7 @@ export default function HomePage() {
                   Recent Research
                 </h2>
                 <span className="text-xs dark:bg-white/10 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full">
-                  {filteredSessions.length}/{sessions.length}
+                  {filteredSessions.length}/{totalSessions}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -608,6 +617,53 @@ export default function HomePage() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Pagination */}
+            {totalSessions > itemsPerPage && (
+              <div className="mt-6 flex items-center justify-between gap-4 glass rounded-lg p-4">
+                <div className="text-sm text-slate-400">
+                  {filteredSessions.length === 0
+                    ? "No results"
+                    : `Page ${currentPage} of ${Math.ceil(totalSessions / itemsPerPage)} (${totalSessions} total)`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg text-sm border border-white/10 text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← Prev
+                  </button>
+                  <div className="flex gap-1">
+                    {Array.from(
+                      { length: Math.ceil(totalSessions / itemsPerPage) },
+                      (_, i) => i + 1
+                    )
+                      .slice(Math.max(0, currentPage - 2), currentPage + 1)
+                      .map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                            page === currentPage
+                              ? "bg-brand-500 text-white"
+                              : "border border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    disabled={currentPage >= Math.ceil(totalSessions / itemsPerPage)}
+                    className="px-3 py-1.5 rounded-lg text-sm border border-white/10 text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </motion.div>

@@ -159,10 +159,11 @@ async def get_sessions(
     search: str = None,
     days: int = None,
     limit: int = 20,
+    offset: int = 0,
     favorites: bool = False,
     current_user: dict = Depends(get_optional_user),
 ):
-    """List sessions — filters to current user's sessions if authenticated"""
+    """List sessions with pagination — filters to current user's sessions if authenticated"""
     user_id = current_user["id"] if current_user else None
     sessions = await _list(user_id=user_id, favorites_only=favorites)
 
@@ -177,13 +178,21 @@ async def get_sessions(
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
 
-    filtered = filtered[:limit]
+    total = len(filtered)
+    # Paginate: offset-based pagination
+    paginated = filtered[offset : offset + limit]
 
     # Strip large report field from list view for performance
-    return [
-        {k: v for k, v in s.items() if k != "report"}
-        for s in filtered
-    ]
+    return {
+        "items": [
+            {k: v for k, v in s.items() if k != "report"}
+            for s in paginated
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + limit < total,
+    }
 
 
 @app.post("/research/{session_id}/favorite")
