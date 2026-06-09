@@ -1,9 +1,12 @@
 import asyncio
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at startup
+
+from groq import Groq as _GroqClient
 
 from fastapi import FastAPI, HTTPException, Depends, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,8 +54,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ResearchMind API",
-    description="Multi-agent AI Research API with JWT auth, webhooks, and streaming",
-    version="1.0.0",
+    description="Multi-agent AI Research API with JWT auth, public API keys, auto-tagging, webhooks, and streaming",
+    version="3.8.0",
     lifespan=lifespan,
 )
 
@@ -138,6 +141,60 @@ async def _list(user_id: str = None, favorites_only: bool = False):
         return sorted(sessions, key=lambda s: s["created_at"], reverse=True)[:20]
 
 
+# ─── Auto-tagging via LLM ────────────────────────────────────────────────────
+
+_TAG_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#3b82f6", "#ec4899", "#8b5cf6"]
+
+async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user_id: str = None) -> None:
+    """Generate 3-5 topic tags for a completed session using Groq LLM.
+
+    Runs the synchronous Groq client in a thread-pool executor so it doesn't
+    block the event loop. Tags are persisted via add_tag() in the database.
+    """
+    if not user_id:
+        return  # Only tag authenticated sessions (tags are user-scoped)
+
+    summary = (report_dict.get("summary") or "")[:600]
+    sections = report_dict.get("sections") or []
+    headings = ", ".join(s.get("heading", "") for s in sections[:5] if s.get("heading"))
+
+    prompt = (
+        f"You are a research tagging assistant. Generate exactly 3 to 5 short, specific tags "
+        f"for the research report below. Tags should be lowercase, 1-3 words each, and capture "
+        f"the key topics, domains, or methods. Reply ONLY with a comma-separated list. "
+        f"No explanations, no numbering, no quotes.\n\n"
+        f"Topic: {topic}\n"
+        f"Section headings: {headings}\n"
+        f"Summary excerpt: {summary}"
+    )
+
+    def _call_groq() -> list[str]:
+        client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=80,
+            temperature=0.3,
+        )
+        raw = response.choices[0].message.content.strip()
+        tags = [t.strip().lower() for t in raw.split(",") if t.strip()]
+        # Keep only reasonably-sized tags; drop anything too long or empty
+        return [t for t in tags if 1 <= len(t) <= 40][:5]
+
+    try:
+        loop = asyncio.get_event_loop()
+        tags = await loop.run_in_executor(None, _call_groq)
+        for i, tag_name in enumerate(tags):
+            color = _TAG_COLORS[i % len(_TAG_COLORS)]
+            try:
+                await add_tag(session_id, tag_name, color)
+            except Exception:
+                pass  # best-effort; don't crash the pipeline
+        print(f"✅ Auto-tagged session {session_id[:8]}: {tags}")
+    except Exception as e:
+        print(f"⚠️  Auto-tagging failed for {session_id[:8]}: {e}")
+
+
 @app.options("/{rest_of_path:path}")
 async def preflight_handler():
     return {"status": "ok"}
@@ -146,7 +203,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.7.1-search"}
+    return {"status": "ok", "version": "3.8.0-backend"}
 
 
 @app.post("/research/start")
@@ -454,6 +511,12 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
 
                     # Cache the completed research for future queries
                     await cache_research(topic, report_dict)
+
+                    # 🏷️ Auto-tag: LLM generates 3-5 topic tags in the background
+                    _user_id = _mem.get(session_id, {}).get("user_id")
+                    asyncio.create_task(
+                        _auto_tag_session(session_id, topic, report_dict, _user_id)
+                    )
 
                     # 🔔 Fire webhook: research completed
                     asyncio.create_task(fire_webhook_event(

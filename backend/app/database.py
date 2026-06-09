@@ -2,6 +2,7 @@ import asyncpg
 import os
 import json
 import secrets
+import hashlib
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
@@ -99,6 +100,27 @@ async def init_db():
         """)
         await conn.execute(
             "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS collection_id TEXT"
+        )
+
+        # API keys — persistent, DB-backed (replaces in-memory store)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id            TEXT PRIMARY KEY,
+                user_id       TEXT NOT NULL,
+                name          TEXT NOT NULL,
+                key_hash      TEXT NOT NULL UNIQUE,
+                key_prefix    TEXT NOT NULL,
+                created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_used_at  TIMESTAMPTZ,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                is_active     BOOLEAN NOT NULL DEFAULT TRUE
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"
         )
 
 
@@ -650,3 +672,104 @@ async def set_session_collection(
     except Exception as e:
         print(f"Failed to set session collection: {e}")
         return None
+
+
+# ---------------------------------------------------------------------------
+# API key management (DB-backed, persistent across deploys)
+# ---------------------------------------------------------------------------
+
+def _hash_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+async def create_api_key_db(user_id: str, name: str) -> Optional[dict]:
+    """Create a persistent API key for a user. Raw key is returned ONCE only."""
+    try:
+        pool = await get_pool()
+        raw_key    = f"rm_{secrets.token_urlsafe(32)}"
+        key_hash   = _hash_key(raw_key)
+        key_prefix = raw_key[:14]          # "rm_" + first 11 chars
+        key_id     = f"key_{secrets.token_hex(8)}"
+
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix)
+                   VALUES ($1, $2, $3, $4, $5)
+                   RETURNING id, user_id, name, key_prefix, created_at, request_count, is_active""",
+                key_id, user_id, name.strip(), key_hash, key_prefix,
+            )
+        result = dict(row)
+        result["created_at"] = result["created_at"].isoformat()
+        result["key"] = raw_key   # shown once — caller must display to user
+        return result
+    except Exception as e:
+        print(f"Failed to create API key: {e}")
+        return None
+
+
+async def validate_api_key_db(raw_key: str) -> Optional[str]:
+    """Return user_id for a valid active key, or None."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT user_id FROM api_keys WHERE key_hash=$1 AND is_active=TRUE",
+                _hash_key(raw_key),
+            )
+        return row["user_id"] if row else None
+    except Exception as e:
+        print(f"Failed to validate API key: {e}")
+        return None
+
+
+async def list_api_keys_db(user_id: str) -> list[dict]:
+    """List all keys for a user (key_hash is never returned)."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, name, key_prefix, created_at, last_used_at,
+                          request_count, is_active
+                   FROM api_keys WHERE user_id=$1 ORDER BY created_at DESC""",
+                user_id,
+            )
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["created_at"]   = d["created_at"].isoformat()
+            d["last_used_at"] = d["last_used_at"].isoformat() if d.get("last_used_at") else None
+            result.append(d)
+        return result
+    except Exception as e:
+        print(f"Failed to list API keys: {e}")
+        return []
+
+
+async def delete_api_key_db(key_id: str, user_id: str) -> bool:
+    """Delete a key by ID. Owner-scoped."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM api_keys WHERE id=$1 AND user_id=$2",
+                key_id, user_id,
+            )
+        return result == "DELETE 1"
+    except Exception as e:
+        print(f"Failed to delete API key: {e}")
+        return False
+
+
+async def update_key_usage_db(raw_key: str) -> None:
+    """Increment request count + update last_used_at timestamp."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE api_keys
+                   SET last_used_at=NOW(), request_count=request_count+1
+                   WHERE key_hash=$1""",
+                _hash_key(raw_key),
+            )
+    except Exception as e:
+        print(f"Failed to update key usage: {e}")
