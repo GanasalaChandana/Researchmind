@@ -9,6 +9,7 @@ import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import ResearchProgress, { Phase } from "@/components/ResearchProgress";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import RelatedResearch from "@/components/RelatedResearch";
+import ReportChat from "@/components/ReportChat";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -276,6 +277,13 @@ export default function ResearchSessionPage() {
 
       {/* Related Research — shown once report is ready */}
       <RelatedResearch sessionId={sessionId} ready={status === "completed"} />
+
+      {/* AI Chat — Q&A grounded in the completed report */}
+      <ReportChat
+        sessionId={sessionId}
+        topic={topic || report?.topic || ""}
+        ready={status === "completed"}
+      />
 
       {/* Share Modal */}
       {showShareModal && shareToken && (

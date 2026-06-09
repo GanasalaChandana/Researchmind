@@ -24,6 +24,7 @@ from .database import (
     create_collection, list_collections, update_collection, delete_collection,
     set_session_collection, search_sessions_full,
     store_kg_entities, get_related_sessions_db, get_top_entities_db,
+    save_chat_message, get_chat_history,
 )
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
@@ -223,6 +224,62 @@ async def _extract_entities_to_graph(
         print(f"⚠️  KG extraction failed for {session_id[:8]}: {e}")
 
 
+# ─── Chat with report ────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _PydanticBase
+
+class ChatMessage(_PydanticBase):
+    message: str
+
+
+def _build_report_context(report: dict, max_chars: int = 8000) -> str:
+    """Flatten the report dict into a plain-text context block for the LLM."""
+    parts: list[str] = []
+
+    topic = report.get("topic", "Research Report")
+    parts.append(f"RESEARCH TOPIC: {topic}\n")
+
+    summary = (report.get("summary") or "")
+    if summary:
+        parts.append(f"\nEXECUTIVE SUMMARY:\n{summary[:2500]}\n")
+
+    for s in (report.get("sections") or [])[:7]:
+        heading = s.get("heading", "")
+        content = (s.get("content") or "")[:600]
+        if heading:
+            parts.append(f"\n## {heading}\n{content}\n")
+
+    sources = report.get("sources") or []
+    if sources:
+        parts.append("\nSOURCES:\n")
+        for i, src in enumerate(sources[:10], 1):
+            title   = src.get("title", "Untitled") if isinstance(src, dict) else getattr(src, "title", "Untitled")
+            url     = src.get("url", "") if isinstance(src, dict) else getattr(src, "url", "")
+            snippet = (src.get("summary", "") if isinstance(src, dict) else getattr(src, "summary", ""))[:200]
+            parts.append(f"[{i}] {title}\n   {url}\n   {snippet}\n")
+
+    return "".join(parts)[:max_chars]
+
+
+def _build_llm_messages(context: str, history: list[dict], topic: str) -> list[dict]:
+    """Build the messages array for the Groq chat API."""
+    system = {
+        "role": "system",
+        "content": (
+            f"You are an expert AI assistant helping a user explore a research report on '{topic}'. "
+            "Answer questions based ONLY on the report content provided. "
+            "If the question falls outside the report scope, say so clearly. "
+            "When referencing facts, cite the source like [Source 1]. "
+            "Be concise and precise. Do not hallucinate facts.\n\n"
+            f"--- REPORT CONTENT ---\n{context}\n--- END REPORT ---"
+        ),
+    }
+    msgs: list[dict] = [system]
+    for m in history[-8:]:           # last 8 messages = 4 turns of context
+        msgs.append({"role": m["role"], "content": m["content"]})
+    return msgs
+
+
 @app.options("/{rest_of_path:path}")
 async def preflight_handler():
     return {"status": "ok"}
@@ -394,6 +451,103 @@ async def get_related_research(
         limit=limit,
     )
     return {"related": related, "session_id": session_id, "total": len(related)}
+
+
+@app.get("/research/{session_id}/chat/history")
+async def get_session_chat_history(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return persisted chat messages for a session (owner only)."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+
+    messages = await get_chat_history(session_id, limit=50)
+    return {"messages": messages, "session_id": session_id}
+
+
+@app.post("/research/{session_id}/chat")
+async def chat_with_report(
+    session_id: str,
+    body: ChatMessage,
+    current_user: dict = Depends(get_current_user),
+):
+    """Stream an LLM answer grounded in the completed research report.
+
+    Uses Groq (Llama 3.3 70B) with the full report as context.
+    Persists both the user question and assistant answer to chat_messages.
+    Returns an SSE stream of JSON chunks: {"type":"chunk","text":"..."} / {"type":"done"}.
+    """
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+    if session.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Research not yet complete")
+
+    report = session.get("report") or {}
+    if isinstance(report, str):
+        report = json.loads(report)
+
+    # Persist the user's question before streaming starts
+    await save_chat_message(session_id, "user", body.message.strip())
+
+    # Load conversation history (includes the message we just saved)
+    history = await get_chat_history(session_id, limit=10)
+
+    context     = _build_report_context(report)
+    llm_msgs    = _build_llm_messages(context, history, session.get("topic", "research"))
+
+    async def event_gen():
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _run_sync():
+            """Blocking Groq stream — runs in thread executor."""
+            try:
+                client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
+                stream = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=llm_msgs,
+                    max_tokens=900,
+                    temperature=0.4,
+                    stream=True,
+                )
+                for chunk in stream:
+                    text = (chunk.choices[0].delta.content or "")
+                    if text:
+                        loop.call_soon_threadsafe(queue.put_nowait, text)
+            except Exception as exc:
+                err_text = f"\n\n⚠️ {str(exc)}"
+                loop.call_soon_threadsafe(queue.put_nowait, err_text)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+
+        loop.run_in_executor(None, _run_sync)
+
+        answer_chunks: list[str] = []
+        while True:
+            text = await queue.get()
+            if text is None:
+                break
+            answer_chunks.append(text)
+            yield {"data": json.dumps({"type": "chunk", "text": text})}
+
+        # Persist full assistant answer
+        full_answer = "".join(answer_chunks)
+        if full_answer and not full_answer.startswith("\n\n⚠️"):
+            try:
+                await save_chat_message(session_id, "assistant", full_answer)
+            except Exception:
+                pass
+
+        yield {"data": json.dumps({"type": "done"})}
+
+    return EventSourceResponse(event_gen())
 
 
 @app.post("/research/{session_id}/favorite")

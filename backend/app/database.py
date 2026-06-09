@@ -167,6 +167,20 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_kg_edges_session ON kg_edges(session_id)"
         )
 
+        # ── Chat messages (per-session Q&A history) ──────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id         TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                role       TEXT NOT NULL,
+                content    TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)"
+        )
+
 
 async def create_session(session_id: str, topic: str, user_id: str = None):
     pool = await get_pool()
@@ -973,4 +987,47 @@ async def get_top_entities_db(
         return [dict(r) for r in rows]
     except Exception as e:
         print(f"Failed to get top entities: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Chat messages (per-session Q&A grounded in report)
+# ---------------------------------------------------------------------------
+
+async def save_chat_message(session_id: str, role: str, content: str) -> dict:
+    """Persist a chat message. Returns the saved row."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        msg_id = f"msg_{secrets.token_hex(8)}"
+        row = await conn.fetchrow(
+            """INSERT INTO chat_messages (id, session_id, role, content)
+               VALUES ($1, $2, $3, $4) RETURNING *""",
+            msg_id, session_id, role, content,
+        )
+        d = dict(row)
+        d["created_at"] = d["created_at"].isoformat()
+        return d
+
+
+async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:
+    """Return chat messages for a session, oldest-first."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, session_id, role, content, created_at
+                   FROM chat_messages
+                   WHERE session_id = $1
+                   ORDER BY created_at ASC
+                   LIMIT $2""",
+                session_id, limit,
+            )
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["created_at"] = d["created_at"].isoformat()
+            result.append(d)
+        return result
+    except Exception as e:
+        print(f"Failed to get chat history: {e}")
         return []
