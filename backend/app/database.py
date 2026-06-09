@@ -1,6 +1,7 @@
 import asyncpg
 import os
 import json
+import uuid
 import secrets
 import hashlib
 from typing import Optional
@@ -121,6 +122,49 @@ async def init_db():
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"
+        )
+
+        # ── Cross-session Knowledge Graph tables ─────────────────────────────────
+        # Normalised entity registry — one row per unique (user, name, type)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS kg_entities (
+                id           TEXT PRIMARY KEY,
+                user_id      TEXT NOT NULL,
+                name         TEXT NOT NULL,
+                type         TEXT NOT NULL DEFAULT 'concept',
+                first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, name, type)
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kg_entities_user ON kg_entities(user_id)"
+        )
+
+        # Many-to-many: session ↔ entity (which sessions mention which entity)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS kg_session_entities (
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                entity_id  TEXT NOT NULL REFERENCES kg_entities(id) ON DELETE CASCADE,
+                PRIMARY KEY (session_id, entity_id)
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kg_se_entity ON kg_session_entities(entity_id)"
+        )
+
+        # Directed edges between entities, scoped to the session they came from
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS kg_edges (
+                id               TEXT PRIMARY KEY,
+                session_id       TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                source_entity_id TEXT NOT NULL REFERENCES kg_entities(id) ON DELETE CASCADE,
+                target_entity_id TEXT NOT NULL REFERENCES kg_entities(id) ON DELETE CASCADE,
+                label            TEXT NOT NULL DEFAULT 'related',
+                weight           INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kg_edges_session ON kg_edges(session_id)"
         )
 
 
@@ -773,3 +817,160 @@ async def update_key_usage_db(raw_key: str) -> None:
             )
     except Exception as e:
         print(f"Failed to update key usage: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Cross-session Knowledge Graph
+# ---------------------------------------------------------------------------
+
+async def store_kg_entities(
+    session_id: str,
+    entities: list[dict],
+    relationships: list[dict],
+    user_id: str,
+) -> None:
+    """Upsert entities from a completed report into the cross-session KG tables.
+
+    * kg_entities       — one row per unique (user_id, name, type)
+    * kg_session_entities — maps this session to each entity
+    * kg_edges          — directed relationship edges for this session
+    """
+    if not entities:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # local report entity-id → DB entity id
+        local_to_db: dict[str, str] = {}
+
+        for ent in entities:
+            name = (ent.get("name") or "").strip()
+            if not name:
+                continue
+            etype  = ent.get("type") or "concept"
+            new_id = str(uuid.uuid4())
+
+            # Upsert: insert new or update to get the canonical id back
+            row = await conn.fetchrow(
+                """
+                INSERT INTO kg_entities (id, user_id, name, type)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id, name, type)
+                    DO UPDATE SET name = EXCLUDED.name
+                RETURNING id
+                """,
+                new_id, user_id, name, etype,
+            )
+            db_id = row["id"]
+            local_to_db[ent.get("id", "")] = db_id
+
+            # Link entity → session
+            await conn.execute(
+                """
+                INSERT INTO kg_session_entities (session_id, entity_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                """,
+                session_id, db_id,
+            )
+
+        # Store directed edges
+        for rel in relationships:
+            src_db = local_to_db.get(rel.get("source_id", ""))
+            tgt_db = local_to_db.get(rel.get("target_id", ""))
+            if not src_db or not tgt_db or src_db == tgt_db:
+                continue
+            await conn.execute(
+                """
+                INSERT INTO kg_edges (id, session_id, source_entity_id, target_entity_id, label, weight)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT DO NOTHING
+                """,
+                str(uuid.uuid4()), session_id, src_db, tgt_db,
+                rel.get("label") or "related",
+                int(rel.get("weight") or 1),
+            )
+
+
+async def get_related_sessions_db(
+    session_id: str,
+    user_id: str,
+    min_shared: int = 1,
+    limit: int = 5,
+) -> list[dict]:
+    """Return completed sessions that share ≥ min_shared entities with session_id.
+
+    Each result includes:
+      id, topic, created_at, shared_count, shared_entities (list of names)
+    """
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    s.id,
+                    s.topic,
+                    s.created_at,
+                    COUNT(kse2.entity_id)                        AS shared_count,
+                    ARRAY_AGG(ke.name ORDER BY ke.name)          AS shared_entities
+                FROM sessions s
+                JOIN kg_session_entities kse2 ON kse2.session_id = s.id
+                JOIN kg_entities ke            ON ke.id = kse2.entity_id
+                WHERE kse2.entity_id IN (
+                    SELECT entity_id
+                    FROM kg_session_entities
+                    WHERE session_id = $1
+                )
+                  AND s.id      != $1
+                  AND s.user_id  = $2
+                  AND s.status   = 'completed'
+                GROUP BY s.id, s.topic, s.created_at
+                HAVING COUNT(kse2.entity_id) >= $3
+                ORDER BY shared_count DESC, s.created_at DESC
+                LIMIT $4
+                """,
+                session_id, user_id, min_shared, limit,
+            )
+        results = []
+        for r in rows:
+            d = dict(r)
+            d["created_at"]      = d["created_at"].isoformat()
+            d["shared_count"]    = int(d["shared_count"])
+            d["shared_entities"] = list(d["shared_entities"] or [])[:6]  # cap display
+            results.append(d)
+        return results
+    except Exception as e:
+        print(f"Failed to get related sessions: {e}")
+        return []
+
+
+async def get_top_entities_db(
+    user_id: str,
+    limit: int = 20,
+    days: int = 30,
+) -> list[dict]:
+    """Return the most-researched entities for a user in the last *days* days."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    ke.name,
+                    ke.type,
+                    COUNT(DISTINCT kse.session_id) AS session_count
+                FROM kg_entities ke
+                JOIN kg_session_entities kse ON kse.entity_id = ke.id
+                JOIN sessions s              ON s.id = kse.session_id
+                WHERE ke.user_id = $1
+                  AND s.created_at > NOW() - ($2 || ' days')::INTERVAL
+                GROUP BY ke.id, ke.name, ke.type
+                ORDER BY session_count DESC
+                LIMIT $3
+                """,
+                user_id, str(days), limit,
+            )
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"Failed to get top entities: {e}")
+        return []

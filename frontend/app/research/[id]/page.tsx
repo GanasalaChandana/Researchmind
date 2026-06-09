@@ -8,6 +8,7 @@ import ReportViewer from "@/components/ReportViewer";
 import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import ResearchProgress, { Phase } from "@/components/ResearchProgress";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
+import RelatedResearch from "@/components/RelatedResearch";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -272,6 +273,9 @@ export default function ResearchSessionPage() {
             </div>
           )
       )}
+
+      {/* Related Research — shown once report is ready */}
+      <RelatedResearch sessionId={sessionId} ready={status === "completed"} />
 
       {/* Share Modal */}
       {showShareModal && shareToken && (

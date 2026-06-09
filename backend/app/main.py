@@ -23,6 +23,7 @@ from .database import (
     add_tag, remove_tag, list_user_tags, get_user_dashboard_stats,
     create_collection, list_collections, update_collection, delete_collection,
     set_session_collection, search_sessions_full,
+    store_kg_entities, get_related_sessions_db, get_top_entities_db,
 )
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
@@ -195,6 +196,33 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
         print(f"⚠️  Auto-tagging failed for {session_id[:8]}: {e}")
 
 
+# ─── Cross-session KG entity extraction ─────────────────────────────────────
+
+async def _extract_entities_to_graph(
+    session_id: str, report_dict: dict, user_id: str
+) -> None:
+    """Normalize the KG from a completed report into persistent cross-session tables.
+
+    Runs after research completes (via asyncio.create_task — non-blocking).
+    Only processes authenticated sessions (entities are user-scoped).
+    """
+    if not user_id:
+        return
+
+    kg = report_dict.get("knowledge_graph") or {}
+    entities      = kg.get("entities")      or []
+    relationships = kg.get("relationships") or []
+
+    if not entities:
+        return
+
+    try:
+        await store_kg_entities(session_id, entities, relationships, user_id)
+        print(f"✅ KG stored for {session_id[:8]}: {len(entities)} entities, {len(relationships)} edges")
+    except Exception as e:
+        print(f"⚠️  KG extraction failed for {session_id[:8]}: {e}")
+
+
 @app.options("/{rest_of_path:path}")
 async def preflight_handler():
     return {"status": "ok"}
@@ -203,7 +231,7 @@ async def preflight_handler():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "version": "3.8.0-backend"}
+    return {"status": "ok", "version": "3.9.0-crosskg"}
 
 
 @app.post("/research/start")
@@ -327,6 +355,45 @@ async def full_text_search(
         results.append(row)
 
     return {"results": results, "query": query, "total": len(results)}
+
+
+@app.get("/research/entities/top")
+async def get_top_research_entities(
+    limit: int = Query(default=20, le=50),
+    days:  int = Query(default=30,  le=365),
+    current_user: dict = Depends(get_current_user),
+):
+    """Most-researched entities for the current user across all sessions.
+
+    Useful for the dashboard 'What I research most' widget.
+    """
+    entities = await get_top_entities_db(current_user["id"], limit=limit, days=days)
+    return {"entities": entities, "limit": limit, "days": days}
+
+
+@app.get("/research/{session_id}/related")
+async def get_related_research(
+    session_id: str,
+    limit: int = Query(default=5, le=10),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return sessions that share knowledge-graph entities with session_id.
+
+    Each result contains: id, topic, created_at, shared_count, shared_entities.
+    Requires the user to own the source session.
+    """
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+
+    related = await get_related_sessions_db(
+        session_id,
+        user_id=current_user["id"],
+        limit=limit,
+    )
+    return {"related": related, "session_id": session_id, "total": len(related)}
 
 
 @app.post("/research/{session_id}/favorite")
@@ -516,6 +583,11 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                     _user_id = _mem.get(session_id, {}).get("user_id")
                     asyncio.create_task(
                         _auto_tag_session(session_id, topic, report_dict, _user_id)
+                    )
+
+                    # 🕸️ KG extraction: store entities into cross-session graph tables
+                    asyncio.create_task(
+                        _extract_entities_to_graph(session_id, report_dict, _user_id)
                     )
 
                     # 🔔 Fire webhook: research completed

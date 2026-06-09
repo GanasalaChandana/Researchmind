@@ -5,7 +5,7 @@ import { getDashboardStats } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, BarChart3, TrendingUp, CheckCircle2,
-  XCircle, Clock, Star, Loader2, Zap, Target,
+  XCircle, Clock, Star, Loader2, Zap, Target, Network,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -48,9 +48,10 @@ const StatCard = ({
 export default function DashboardPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [stats, setStats]           = useState<DashboardStats | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
+  const [topEntities, setTopEntities] = useState<{ name: string; type: string; session_count: number }[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) { router.push("/"); return; }
@@ -59,6 +60,20 @@ export default function DashboardPage() {
       .catch((err) => setError(err.message || "Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, [isAuthenticated, router]);
+
+  // Fetch top entities separately (non-blocking)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+    if (!token) return;
+    fetch("/api/research/entities/top?limit=16&days=90", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(r => r.ok ? r.json() : { entities: [] })
+      .then(data => setTopEntities(data.entities ?? []))
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) return null;
 
@@ -223,6 +238,57 @@ export default function DashboardPage() {
           </motion.div>
         )}
       </div>
+
+      {/* Top Entities */}
+      {topEntities.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="mt-4 rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.02] bg-white p-5"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Network className="w-4 h-4 text-brand-400" />
+            <h2 className="text-sm font-semibold dark:text-white text-slate-800">
+              Most Researched Concepts
+            </h2>
+            <span className="text-xs text-slate-500 ml-auto">last 90 days</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {topEntities.map((ent, i) => {
+              // Scale bubble size by session_count
+              const max = topEntities[0]?.session_count ?? 1;
+              const pct = ent.session_count / max;
+              const size = pct > 0.7 ? "text-sm px-3 py-1.5"
+                         : pct > 0.4 ? "text-xs px-2.5 py-1"
+                         : "text-[11px] px-2 py-0.5";
+              const colors = [
+                "bg-brand-500/15 border-brand-500/25 text-brand-300",
+                "bg-emerald-500/15 border-emerald-500/25 text-emerald-300",
+                "bg-amber-500/15 border-amber-500/25 text-amber-300",
+                "bg-violet-500/15 border-violet-500/25 text-violet-300",
+                "bg-rose-500/15 border-rose-500/25 text-rose-300",
+                "bg-sky-500/15 border-sky-500/25 text-sky-300",
+              ];
+              return (
+                <span
+                  key={ent.name}
+                  title={`${ent.session_count} session${ent.session_count !== 1 ? "s" : ""} · ${ent.type}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border font-medium transition-opacity hover:opacity-80 cursor-default ${size} ${colors[i % colors.length]}`}
+                >
+                  {ent.name}
+                  {ent.session_count > 1 && (
+                    <span className="opacity-60 text-[10px]">×{ent.session_count}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-600 mt-3">
+            Entities extracted from your completed research reports
+          </p>
+        </motion.div>
+      )}
     </div>
   );
 }
