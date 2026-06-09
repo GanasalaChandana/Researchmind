@@ -20,6 +20,7 @@ import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
 import PromptCustomizer from "@/components/PromptCustomizer";
 import AuthModal from "@/components/AuthModal";
+import OnboardingModal from "@/components/OnboardingModal";
 import { useAuth } from "@/context/AuthContext";
 import { logout } from "@/lib/auth";
 import { LogIn, LogOut, UserCircle2 } from "lucide-react";
@@ -76,6 +77,7 @@ export default function HomePage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customPrompts, setCustomPrompts] = useState<string[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSessions, setTotalSessions] = useState(0);
@@ -108,6 +110,13 @@ export default function HomePage() {
       const url = new URL(window.location.href);
       url.searchParams.delete("reset_token");
       window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  // Show onboarding modal on first visit
+  useEffect(() => {
+    if (!localStorage.getItem("rm_onboarded")) {
+      setShowOnboarding(true);
     }
   }, []);
 
@@ -417,9 +426,27 @@ export default function HomePage() {
             <span className="hidden sm:inline">Dashboard</span>
           </button>
         )}
+        <button
+          onClick={() => setShowOnboarding(true)}
+          className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg dark:text-slate-400 text-slate-600 hover:dark:text-white hover:text-slate-900 dark:hover:bg-white/5 hover:bg-slate-100 transition-colors"
+          title="What can ResearchMind do?"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Tour</span>
+        </button>
         <ThemeToggle />
         </div>
       </header>
+
+      {/* Onboarding modal — shown only on first visit */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <OnboardingModal
+            onClose={() => setShowOnboarding(false)}
+            onSignIn={() => { setShowOnboarding(false); setShowAuthModal(true); }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Auth Modal */}
       <AnimatePresence>
@@ -853,11 +880,28 @@ export default function HomePage() {
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center py-8 text-slate-500 text-sm"
+                    className="text-center py-10"
                   >
-                    {totalSessions === 0
-                      ? "No research sessions yet — start one above!"
-                      : "No research sessions match your search"}
+                    {totalSessions === 0 ? (
+                      /* First-time empty state */
+                      <div className="space-y-4">
+                        <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto">
+                          <Sparkles className="w-6 h-6 text-brand-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium dark:text-slate-300 text-slate-700 mb-1">No research yet</p>
+                          <p className="text-xs dark:text-slate-500 text-slate-500">Type a topic above and hit <span className="text-brand-400 font-medium">Start Research</span> to create your first report.</p>
+                        </div>
+                        <button
+                          onClick={() => setShowOnboarding(true)}
+                          className="inline-flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                        >
+                          <Sparkles className="w-3 h-3" /> See what ResearchMind can do
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm dark:text-slate-500 text-slate-500">No sessions match your filters</p>
+                    )}
                   </motion.div>
                 ) : (
                   filteredSessions.map((s) => (
