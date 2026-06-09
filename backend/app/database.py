@@ -1058,6 +1058,19 @@ async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:  # n
         return []
 
 
+async def delete_chat_history(session_id: str) -> None:
+    """Delete all chat messages for a session."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM chat_messages WHERE session_id = $1",
+                session_id,
+            )
+    except Exception as e:
+        print(f"Failed to delete chat history: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Scheduled research (cron-based recurring topics)
 # ---------------------------------------------------------------------------

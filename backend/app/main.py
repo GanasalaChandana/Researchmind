@@ -24,7 +24,7 @@ from .database import (
     create_collection, list_collections, update_collection, delete_collection,
     set_session_collection, search_sessions_full,
     store_kg_entities, get_related_sessions_db, get_top_entities_db,
-    save_chat_message, get_chat_history,
+    save_chat_message, get_chat_history, delete_chat_history,
     create_schedule_db, list_schedules_db, get_schedule_db,
     update_schedule_run, toggle_schedule_active,
     delete_schedule_db, get_all_active_schedules,
@@ -653,6 +653,21 @@ async def get_session_chat_history(
 
     messages = await get_chat_history(session_id, limit=50)
     return {"messages": messages, "session_id": session_id}
+
+
+@app.delete("/research/{session_id}/chat/history")
+async def clear_session_chat_history(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete all chat messages for a session (owner only)."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+    await delete_chat_history(session_id)
+    return {"ok": True}
 
 
 @app.post("/research/{session_id}/chat")

@@ -175,9 +175,18 @@ export default function ReportChat({ sessionId, topic, ready }: Props) {
     }
   }
 
-  function clearHistory() {
+  async function clearHistory() {
+    const tk = token();
+    if (tk && BACKEND) {
+      // Delete from DB so history doesn't reload on refresh
+      fetch(`${BACKEND}/research/${sessionId}/chat/history`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${tk}` },
+      }).catch(() => {});
+    }
     setMessages([]);
-    setHistoryLoaded(false);
+    // Keep historyLoaded = true so the useEffect doesn't immediately
+    // re-fetch from DB and undo the clear
   }
 
   if (!ready) return null;
