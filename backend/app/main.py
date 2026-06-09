@@ -33,7 +33,11 @@ from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
     register_webhook, list_webhooks, delete_webhook,
-    fire_webhook_event
+    fire_webhook_event,
+)
+from .database import (
+    create_webhook_db, list_webhooks_db, delete_webhook_db,
+    toggle_webhook_active, list_webhook_deliveries,
 )
 from .auth.user_db import init_user_tables
 from .routes.auth import router as auth_router
@@ -948,7 +952,8 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                     # 🔔 Fire webhook: research completed
                     asyncio.create_task(fire_webhook_event(
                         session_id, "completed",
-                        {"topic": topic, "session_id": session_id, "summary": report_dict.get("summary", "")[:500]}
+                        {"topic": topic, "session_id": session_id, "summary": report_dict.get("summary", "")[:500]},
+                        user_id=_user_id,
                     ))
 
                 yield {"data": event.model_dump_json()}
@@ -959,7 +964,8 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
             # 🔔 Fire webhook: research failed
             asyncio.create_task(fire_webhook_event(
                 session_id, "failed",
-                {"topic": topic, "session_id": session_id, "error": str(e)}
+                {"topic": topic, "session_id": session_id, "error": str(e)},
+                user_id=_mem.get(session_id, {}).get("user_id"),
             ))
             error_event = AgentEvent(type="error", agent="system", message=friendly_error(e))
             yield {"data": error_event.model_dump_json()}
@@ -1355,6 +1361,120 @@ async def run_schedule_now(
         )
     )
     return {"session_id": session_id, "topic": sched["topic"], "status": "triggered"}
+
+
+# ─── User-level webhook management ──────────────────────────────────────────
+
+class _WebhookCreate(_PydanticBase):
+    url: str
+    events: list[str] = ["completed", "failed"]
+    secret: str | None = None
+
+
+class _WebhookToggle(_PydanticBase):
+    is_active: bool
+
+
+@app.get("/webhooks")
+async def list_user_webhooks(current_user: dict = Depends(get_current_user)):
+    """List all webhooks registered for the authenticated user."""
+    hooks = await list_webhooks_db(current_user["id"])
+    return {"webhooks": hooks, "count": len(hooks)}
+
+
+@app.post("/webhooks", status_code=201)
+async def create_user_webhook(
+    req: _WebhookCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Register a persistent webhook that fires for all of the user's research sessions.
+
+    Supported events: `completed`, `failed`.
+    If a `secret` is provided, every delivery will include an
+    `X-ResearchMind-Signature: sha256=<hmac>` header for verification.
+
+    The `secret` field is returned **only once** in this response — store it safely.
+    """
+    hook = await create_webhook_db(
+        user_id=current_user["id"],
+        url=req.url,
+        events=req.events,
+        secret=req.secret,
+    )
+    return {"status": "created", "webhook": hook}
+
+
+@app.patch("/webhooks/{webhook_id}")
+async def toggle_user_webhook(
+    webhook_id: str,
+    req: _WebhookToggle,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pause or resume a webhook."""
+    hook = await toggle_webhook_active(webhook_id, current_user["id"], req.is_active)
+    if not hook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return {"status": "updated", "webhook": hook}
+
+
+@app.delete("/webhooks/{webhook_id}")
+async def delete_user_webhook(
+    webhook_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a webhook registration."""
+    deleted = await delete_webhook_db(webhook_id, current_user["id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return {"status": "deleted", "webhook_id": webhook_id}
+
+
+@app.post("/webhooks/{webhook_id}/test")
+async def test_user_webhook(
+    webhook_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a test event to the webhook URL to verify connectivity."""
+    import secrets as _secrets
+    from .tools.webhooks import _post_once
+    from .database import get_user_webhooks_for_event
+
+    # Verify ownership
+    hooks = await list_webhooks_db(current_user["id"])
+    hook = next((h for h in hooks if h["id"] == webhook_id), None)
+    if not hook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    # Get secret-bearing row for HMAC signing
+    all_hooks = await get_user_webhooks_for_event(current_user["id"], "test")
+    full_hook = next(
+        (h for h in all_hooks if h["id"] == webhook_id),
+        {"id": webhook_id, "url": hook["url"], "secret": None},
+    )
+
+    payload = {
+        "event": "test",
+        "session_id": "test_session",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "delivery_id": f"test_{_secrets.token_hex(6)}",
+        "data": {"message": "Test delivery from ResearchMind", "user": current_user.get("email", "")},
+    }
+    ok, status_code, err, dur = await _post_once(full_hook, json.dumps(payload))
+    return {"success": ok, "status_code": status_code, "duration_ms": dur, "error": err}
+
+
+@app.get("/webhooks/{webhook_id}/deliveries")
+async def get_webhook_deliveries(
+    webhook_id: str,
+    limit: int = Query(default=20, le=100),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get delivery log for a webhook (most recent first)."""
+    hooks = await list_webhooks_db(current_user["id"])
+    if not any(h["id"] == webhook_id for h in hooks):
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    deliveries = await list_webhook_deliveries(webhook_id, limit=limit)
+    return {"deliveries": deliveries, "count": len(deliveries)}
 
 
 # ─── Collections (named folders) ─────────────────────────────────────────────

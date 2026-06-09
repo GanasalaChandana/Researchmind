@@ -206,6 +206,208 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_schedules_active ON scheduled_research(is_active)"
         )
 
+        # ── User-level webhooks (persistent, DB-backed) ───────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id               TEXT PRIMARY KEY,
+                user_id          TEXT NOT NULL,
+                url              TEXT NOT NULL,
+                events           JSONB NOT NULL DEFAULT '["completed","failed"]',
+                secret           TEXT,
+                secret_hint      TEXT,
+                is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_fired_at    TIMESTAMPTZ,
+                total_deliveries INTEGER NOT NULL DEFAULT 0,
+                total_failures   INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id)"
+        )
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                id           TEXT PRIMARY KEY,
+                webhook_id   TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+                session_id   TEXT,
+                event        TEXT NOT NULL,
+                status_code  INTEGER,
+                duration_ms  INTEGER,
+                success      BOOLEAN NOT NULL DEFAULT FALSE,
+                attempt      INTEGER NOT NULL DEFAULT 1,
+                error        TEXT,
+                delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wh_deliveries_wid ON webhook_deliveries(webhook_id)"
+        )
+
+
+async def create_webhook_db(
+    user_id: str,
+    url: str,
+    events: list,
+    secret: Optional[str] = None,
+) -> dict:
+    pool = await get_pool()
+    wh_id = f"wh_{secrets.token_hex(8)}"
+    hint = (secret[:4] + "****") if secret and len(secret) >= 4 else None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO webhooks (id, user_id, url, events, secret, secret_hint)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, user_id, url, events, secret_hint, is_active,
+                      created_at, last_fired_at, total_deliveries, total_failures
+            """,
+            wh_id, user_id, url, json.dumps(events), secret, hint,
+        )
+        d = dict(row)
+        d["events"] = json.loads(d["events"]) if isinstance(d["events"], str) else d["events"]
+        d["created_at"] = d["created_at"].isoformat() if d["created_at"] else None
+        d["last_fired_at"] = d["last_fired_at"].isoformat() if d["last_fired_at"] else None
+        d["secret"] = secret  # return once on creation
+        return d
+
+
+async def list_webhooks_db(user_id: str) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, url, events, secret_hint, is_active,
+                   created_at, last_fired_at, total_deliveries, total_failures
+            FROM webhooks WHERE user_id=$1 ORDER BY created_at DESC
+            """,
+            user_id,
+        )
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["events"] = json.loads(d["events"]) if isinstance(d["events"], str) else d["events"]
+            d["created_at"] = d["created_at"].isoformat() if d["created_at"] else None
+            d["last_fired_at"] = d["last_fired_at"].isoformat() if d["last_fired_at"] else None
+            result.append(d)
+        return result
+
+
+async def get_user_webhooks_for_event(user_id: str, event: str) -> list[dict]:
+    """Return active webhooks that match the event — includes secret for signing."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, url, events, secret, is_active
+            FROM webhooks
+            WHERE user_id=$1 AND is_active=TRUE
+            """,
+            user_id,
+        )
+        result = []
+        for row in rows:
+            d = dict(row)
+            evts = json.loads(d["events"]) if isinstance(d["events"], str) else d["events"]
+            if event in evts:
+                d["events"] = evts
+                result.append(d)
+        return result
+
+
+async def delete_webhook_db(webhook_id: str, user_id: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM webhooks WHERE id=$1 AND user_id=$2", webhook_id, user_id
+        )
+        return result == "DELETE 1"
+
+
+async def toggle_webhook_active(webhook_id: str, user_id: str, is_active: bool) -> Optional[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE webhooks SET is_active=$1 WHERE id=$2 AND user_id=$3
+            RETURNING id, url, events, secret_hint, is_active,
+                      created_at, last_fired_at, total_deliveries, total_failures
+            """,
+            is_active, webhook_id, user_id,
+        )
+        if not row:
+            return None
+        d = dict(row)
+        d["events"] = json.loads(d["events"]) if isinstance(d["events"], str) else d["events"]
+        d["created_at"] = d["created_at"].isoformat() if d["created_at"] else None
+        d["last_fired_at"] = d["last_fired_at"].isoformat() if d["last_fired_at"] else None
+        return d
+
+
+async def log_webhook_delivery(
+    webhook_id: str,
+    session_id: Optional[str],
+    event: str,
+    status_code: Optional[int],
+    success: bool,
+    attempt: int,
+    error: Optional[str],
+    duration_ms: int,
+) -> None:
+    pool = await get_pool()
+    del_id = f"wd_{secrets.token_hex(8)}"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO webhook_deliveries
+              (id, webhook_id, session_id, event, status_code, duration_ms, success, attempt, error)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            """,
+            del_id, webhook_id, session_id, event, status_code, duration_ms, success, attempt, error,
+        )
+
+
+async def update_webhook_stats(webhook_id: str, success: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if success:
+            await conn.execute(
+                """
+                UPDATE webhooks
+                SET total_deliveries = total_deliveries + 1,
+                    last_fired_at = NOW()
+                WHERE id=$1
+                """,
+                webhook_id,
+            )
+        else:
+            await conn.execute(
+                "UPDATE webhooks SET total_failures = total_failures + 1 WHERE id=$1",
+                webhook_id,
+            )
+
+
+async def list_webhook_deliveries(webhook_id: str, limit: int = 20) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, webhook_id, session_id, event, status_code, duration_ms,
+                   success, attempt, error, delivered_at
+            FROM webhook_deliveries
+            WHERE webhook_id=$1
+            ORDER BY delivered_at DESC
+            LIMIT $2
+            """,
+            webhook_id, limit,
+        )
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["delivered_at"] = d["delivered_at"].isoformat() if d["delivered_at"] else None
+            result.append(d)
+        return result
+
 
 async def create_session(session_id: str, topic: str, user_id: str = None):
     pool = await get_pool()
