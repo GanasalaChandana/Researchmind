@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
+// Call the Railway backend directly — bypasses Next.js proxy entirely.
+// CORS is already configured on the backend to allow researchmind*.vercel.app.
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+
 interface ApiKey {
   id: string;
   name: string;
@@ -19,39 +23,54 @@ interface ApiKey {
   is_active: boolean;
 }
 
+function _token(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("rm_access_token") ?? "";
+}
+
 function _authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("rm_access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const t = _token();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 async function fetchKeys(): Promise<ApiKey[]> {
-  const headers = _authHeaders();
-  if (!headers["Authorization"]) return []; // no token — skip request
-  const res = await fetch("/api/apikeys", { headers, cache: "no-store" });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.keys ?? [];
+  const token = _token();
+  if (!token || !BACKEND) return [];
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/keys`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.keys ?? [];
+  } catch { return []; }
 }
 
 async function createKey(name: string): Promise<{ key: string; id: string; key_prefix: string; name: string; created_at: string } | null> {
-  const headers = _authHeaders();
-  if (!headers["Authorization"]) return null; // no token — skip request
-  const res = await fetch("/api/apikeys", {
-    method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) return null;
-  return await res.json();
+  const token = _token();
+  if (!token || !BACKEND) return null;
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/keys`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
 }
 
 async function deleteKey(id: string): Promise<boolean> {
-  const res = await fetch(`/api/apikeys/${id}`, {
-    method: "DELETE",
-    headers: _authHeaders(),
-  });
-  return res.ok;
+  const token = _token();
+  if (!token || !BACKEND) return false;
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/keys/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok;
+  } catch { return false; }
 }
 
 function fmtDate(iso: string | null): string {
