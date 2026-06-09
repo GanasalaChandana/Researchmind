@@ -1,23 +1,30 @@
-# ResearchMind — Multi-Agent AI Research Agent
+# ResearchMind — Multi-Agent AI Research Platform
 
 [![CI](https://github.com/GanasalaChandana/Researchmind/actions/workflows/ci.yml/badge.svg)](https://github.com/GanasalaChandana/Researchmind/actions/workflows/ci.yml)
 
-> Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + PDF export.
+> Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + REST API access.
 
-🔗 **Live Demo:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)
+🔗 **Live App:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)  
+🔗 **Backend API:** [researchmind-production-b6ca.up.railway.app](https://researchmind-production-b6ca.up.railway.app)
 
 ---
 
-## What it does
+## Features
 
 | Feature | Description |
 |---|---|
-| 🧠 Multi-agent pipeline | Orchestrator → Search → Reader → Synthesizer agents coordinate automatically |
+| 🤖 Multi-agent pipeline | Orchestrator → Search → Reader → Synthesizer agents in parallel |
 | 📡 Live streaming | Watch every agent reasoning step in real-time via SSE |
-| 🕸️ Knowledge Graph | Interactive D3 force graph of entities and relationships extracted from research |
-| 📄 Research Report | Structured report with inline citations and source links |
-| 📥 PDF Export | Download the full report as a formatted PDF |
-| 🗄️ Persistent history | All sessions saved to PostgreSQL — revisit any past research |
+| 🕸️ Knowledge Graph | Interactive D3 force graph per report + cross-session entity linking |
+| 🔍 Full-text search | Search across all report bodies, not just titles |
+| 🏷️ Auto-tagging | LLM generates 3–5 topic tags automatically after research completes |
+| 📁 Collections | Organize sessions into color-coded folders |
+| 📊 Dashboard | Usage analytics — sessions by date, top topics, most-researched concepts |
+| 🔗 Share links | Token-based public share links with 30-day expiry |
+| ↔️ Compare | Side-by-side comparison of two sessions with source overlap analysis |
+| 📤 Export | Markdown, HTML, PDF, DOCX export |
+| 🔑 Public API | REST API with per-key rate limiting (100 req/hr) |
+| 🔔 Webhooks | Fire events to your endpoint on research completion |
 
 ---
 
@@ -30,34 +37,33 @@ User Input
 ┌─────────────────────────────────────────┐
 │           Orchestrator Agent            │
 │  Llama 3.3 70B breaks topic into        │
-│  3-5 targeted sub-questions             │
+│  sub-questions                          │
 └──────────────┬──────────────────────────┘
-               │ sub-questions
+               │
                ▼
 ┌─────────────────────────────────────────┐
 │            Search Agent                 │
 │  DuckDuckGo searches each sub-question  │
 │  Deduplicates and ranks sources         │
 └──────────────┬──────────────────────────┘
-               │ top URLs + snippets
+               │
                ▼
 ┌─────────────────────────────────────────┐
 │            Reader Agent                 │
-│  Scrapes each URL (httpx + BS4)         │
-│  Llama 3.1 8B summarizes each source    │
+│  Scrapes top URLs, summarises content   │
 └──────────────┬──────────────────────────┘
-               │ enriched summaries
+               │
                ▼
 ┌─────────────────────────────────────────┐
 │           Synthesizer Agent             │
-│  Extracts knowledge graph entities      │
-│  Writes full report with citations      │
-│  Saves to PostgreSQL (Supabase)         │
+│  Writes report + KG + citations         │
+│  Saves to PostgreSQL                    │
+│  Fires auto-tagging + KG extraction     │
 └─────────────────────────────────────────┘
                │
                ▼
-         Frontend (SSE stream)
-    Agent Activity │ Knowledge Graph │ Report
+    Frontend SSE stream
+  Agents │ Knowledge Graph │ Report
 ```
 
 ---
@@ -67,12 +73,12 @@ User Input
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, Framer Motion |
-| Streaming | Server-Sent Events (SSE) via Next.js API proxy |
-| Graph viz | react-force-graph-2d (canvas, D3 physics) |
+| Streaming | Server-Sent Events (SSE) proxied through Next.js |
+| Graph viz | react-force-graph-2d (D3 canvas) |
 | Backend | Python FastAPI, asyncio |
-| LLM | Groq API — Llama 3.3 70B (reasoning) + Llama 3.1 8B (summarization) |
-| Web search | DuckDuckGo Search (no API key needed) |
-| Database | PostgreSQL on Supabase (asyncpg) |
+| LLM | Groq API — Llama 3.3 70B |
+| Database | PostgreSQL on Railway (asyncpg) |
+| Auth | JWT (access + refresh tokens) |
 | Deploy | Vercel (frontend) + Railway (backend) |
 
 ---
@@ -82,29 +88,42 @@ User Input
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- Groq API key (free at [console.groq.com](https://console.groq.com))
+- PostgreSQL database
+- Groq API key → [console.groq.com](https://console.groq.com) (free)
 
 ### Backend
+
 ```bash
-cd backend
+cd backend   # or project root
 python -m venv venv
-source venv/bin/activate  # Windows: .\venv\Scripts\Activate.ps1
+source venv/bin/activate        # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
-# Create .env file
-echo "GROQ_API_KEY=your_key_here" > .env
+Create `backend/.env`:
+```env
+GROQ_API_KEY=your_groq_key_here
+DATABASE_URL=postgresql://user:pass@localhost:5432/researchmind
+SECRET_KEY=any-random-string-for-jwt
+```
 
-uvicorn app.main:app --reload
+```bash
+uvicorn app.main:app --reload --port 8000
 ```
 
 ### Frontend
+
 ```bash
 cd frontend
 npm install
+```
 
-# Create .env.local
-echo "NEXT_PUBLIC_BACKEND_URL=http://localhost:8000" > .env.local
+Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+```
 
+```bash
 npm run dev
 ```
 
@@ -112,12 +131,70 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## Key Design Decisions
+## REST API
 
-- **Agent coordination via async generators** — each agent yields events as it works, enabling real-time streaming without queues or message brokers
-- **SSE proxied through Next.js** — avoids CORS issues and Vercel edge buffering
-- **Graceful DB fallback** — if PostgreSQL is unavailable, falls back to in-memory store so the app never crashes
-- **LLM routing by task** — fast Llama 8B for summarization, powerful Llama 70B for reasoning and synthesis
+The backend exposes a public REST API. Authenticate with an API key generated from the **Developer** page (`/developer`) in the app.
+
+### Authentication
+All endpoints require:
+```
+Authorization: Bearer <your-api-key>
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/research/{id}/status` | Poll research progress |
+| `GET` | `/api/v1/research/{id}/report` | Fetch completed report |
+| `GET` | `/api/v1/research/{id}/export/json` | Export as JSON |
+| `GET` | `/api/v1/info` | Rate-limit status for your key |
+
+### Quick example
+
+```bash
+# Get a completed report
+curl https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report \
+  -H "Authorization: Bearer rm_your_key_here"
+```
+
+```python
+import requests
+
+headers = {"Authorization": "Bearer rm_your_key_here"}
+r = requests.get(
+    "https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report",
+    headers=headers
+)
+report = r.json()
+print(report["summary"])
+```
+
+```js
+// From browser console on researchmind-app.vercel.app
+fetch("https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report", {
+  headers: { "Authorization": "Bearer rm_your_key" }
+})
+.then(r => r.json())
+.then(console.log)
+```
+
+### Rate limits
+- **100 requests / hour** per API key
+- Returns `429 Too Many Requests` when exceeded
+- Resets on a rolling 1-hour window
+
+---
+
+## How to Get an API Key
+
+1. Sign in at [researchmind-app.vercel.app](https://researchmind-app.vercel.app)
+2. Click **API** in the navigation bar
+3. Enter a name for your key and click **Generate**
+4. **Copy the key immediately** — it is shown only once
+5. Use it in your requests: `Authorization: Bearer rm_...`
+
+> Keys are hashed (SHA-256) in the database — the raw key is never stored or retrievable after creation.
 
 ---
 
@@ -126,25 +203,37 @@ Open [http://localhost:3000](http://localhost:3000)
 ```
 researchmind/
 ├── backend/
-│   ├── app/
-│   │   ├── agents/          # Orchestrator, Search, Reader, Synthesizer
-│   │   ├── tools/           # Web search, URL reader
-│   │   ├── models/          # Pydantic schemas
-│   │   ├── database.py      # PostgreSQL + asyncpg
-│   │   ├── config.py        # Env loading
-│   │   └── main.py          # FastAPI app + SSE endpoints
-│   └── requirements.txt
+│   └── app/
+│       ├── main.py              # FastAPI app, research pipeline, streaming
+│       ├── database.py          # PostgreSQL helpers
+│       ├── agents/              # Orchestrator, Search, Reader, Synthesizer
+│       ├── auth/                # JWT auth
+│       └── api/                 # Route handlers
 └── frontend/
-    ├── app/
-    │   ├── api/research/    # Next.js proxy routes
-    │   ├── research/[id]/   # Session page
-    │   └── page.tsx         # Homepage + history
-    ├── components/
-    │   ├── AgentActivityFeed.tsx
-    │   ├── KnowledgeGraph.tsx
-    │   └── ReportViewer.tsx
-    └── lib/
-        ├── api.ts
-        ├── types.ts
-        └── exportPdf.ts
+    └── app/
+        ├── page.tsx             # Home
+        ├── research/            # Session pages
+        ├── dashboard/           # Analytics
+        └── developer/           # API key management
 ```
+
+---
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/your-feature`
+3. Commit: `git commit -m "feat: describe your change"`
+4. Push and open a PR
+
+---
+
+## Contributors
+
+- **GanasalaChandana** — project author
+
+---
+
+## License
+
+MIT
