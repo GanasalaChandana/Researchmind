@@ -7,7 +7,7 @@ import {
   AlertTriangle, ExternalLink, RefreshCw, Shield,
   Code2, Zap, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 
 interface ApiKey {
   id: string;
