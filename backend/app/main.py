@@ -1232,7 +1232,7 @@ async def revoke_share_link(session_id: str, share_token: str, user: dict = Depe
 
 # ─── Schedule endpoints ──────────────────────────────────────────────────────
 
-class _ScheduleCreate(_BaseModel):
+class _ScheduleCreate(_PydanticBase):
     topic: str
     frequency: str = "weekly"    # "daily" | "weekly"
     day_of_week: int = 0          # 0=Mon … 6=Sun  (weekly only)
@@ -1240,7 +1240,7 @@ class _ScheduleCreate(_BaseModel):
     depth: int = 3
     notify_email: bool = True
 
-class _ScheduleToggle(_BaseModel):
+class _ScheduleToggle(_PydanticBase):
     is_active: bool
 
 
