@@ -181,6 +181,31 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)"
         )
 
+        # ── Scheduled research (cron-based recurring topics) ──────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_research (
+                id              TEXT PRIMARY KEY,
+                user_id         TEXT NOT NULL,
+                topic           TEXT NOT NULL,
+                frequency       TEXT NOT NULL DEFAULT 'weekly',  -- 'daily' | 'weekly'
+                day_of_week     INTEGER NOT NULL DEFAULT 0,       -- 0=Mon … 6=Sun (weekly only)
+                hour            INTEGER NOT NULL DEFAULT 9,       -- UTC hour 0–23
+                depth           INTEGER NOT NULL DEFAULT 3,
+                is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+                notify_email    BOOLEAN NOT NULL DEFAULT TRUE,
+                last_run_at     TIMESTAMPTZ,
+                last_session_id TEXT,
+                run_count       INTEGER NOT NULL DEFAULT 0,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_user ON scheduled_research(user_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_active ON scheduled_research(is_active)"
+        )
+
 
 async def create_session(session_id: str, topic: str, user_id: str = None):
     pool = await get_pool()
@@ -1009,7 +1034,7 @@ async def save_chat_message(session_id: str, role: str, content: str) -> dict:
         return d
 
 
-async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:
+async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:  # noqa: E302
     """Return chat messages for a session, oldest-first."""
     try:
         pool = await get_pool()
@@ -1030,4 +1055,134 @@ async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:
         return result
     except Exception as e:
         print(f"Failed to get chat history: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Scheduled research (cron-based recurring topics)
+# ---------------------------------------------------------------------------
+
+def _sched_row(row) -> dict:
+    d = dict(row)
+    if d.get("created_at"):
+        d["created_at"] = d["created_at"].isoformat()
+    if d.get("last_run_at"):
+        d["last_run_at"] = d["last_run_at"].isoformat()
+    return d
+
+
+async def create_schedule_db(
+    user_id: str,
+    topic: str,
+    frequency: str,
+    hour: int,
+    day_of_week: int,
+    depth: int,
+    notify_email: bool,
+) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        sched_id = f"sch_{secrets.token_hex(8)}"
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """INSERT INTO scheduled_research
+                       (id, user_id, topic, frequency, day_of_week, hour, depth, notify_email)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                   RETURNING *""",
+                sched_id, user_id, topic.strip(), frequency,
+                day_of_week, hour, depth, notify_email,
+            )
+        return _sched_row(row) if row else None
+    except Exception as e:
+        print(f"Failed to create schedule: {e}")
+        return None
+
+
+async def list_schedules_db(user_id: str) -> list[dict]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM scheduled_research WHERE user_id=$1 ORDER BY created_at DESC",
+                user_id,
+            )
+        return [_sched_row(r) for r in rows]
+    except Exception as e:
+        print(f"Failed to list schedules: {e}")
+        return []
+
+
+async def get_schedule_db(schedule_id: str) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM scheduled_research WHERE id=$1", schedule_id
+            )
+        return _sched_row(row) if row else None
+    except Exception as e:
+        print(f"Failed to get schedule: {e}")
+        return None
+
+
+async def update_schedule_run(schedule_id: str, session_id: str) -> None:
+    """Called after each schedule fires — bump run_count + record last session."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE scheduled_research
+                   SET last_run_at=NOW(), last_session_id=$1,
+                       run_count=run_count+1
+                   WHERE id=$2""",
+                session_id, schedule_id,
+            )
+    except Exception as e:
+        print(f"Failed to update schedule run: {e}")
+
+
+async def toggle_schedule_active(
+    schedule_id: str, user_id: str, is_active: bool
+) -> Optional[dict]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """UPDATE scheduled_research
+                   SET is_active=$1
+                   WHERE id=$2 AND user_id=$3
+                   RETURNING *""",
+                is_active, schedule_id, user_id,
+            )
+        return _sched_row(row) if row else None
+    except Exception as e:
+        print(f"Failed to toggle schedule: {e}")
+        return None
+
+
+async def delete_schedule_db(schedule_id: str, user_id: str) -> bool:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM scheduled_research WHERE id=$1 AND user_id=$2",
+                schedule_id, user_id,
+            )
+        return result == "DELETE 1"
+    except Exception as e:
+        print(f"Failed to delete schedule: {e}")
+        return False
+
+
+async def get_all_active_schedules() -> list[dict]:
+    """Return all active schedules across all users — used by scheduler at startup."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM scheduled_research WHERE is_active=TRUE"
+            )
+        return [_sched_row(r) for r in rows]
+    except Exception as e:
+        print(f"Failed to fetch active schedules: {e}")
         return []

@@ -25,6 +25,9 @@ from .database import (
     set_session_collection, search_sessions_full,
     store_kg_entities, get_related_sessions_db, get_top_entities_db,
     save_chat_message, get_chat_history,
+    create_schedule_db, list_schedules_db, get_schedule_db,
+    update_schedule_run, toggle_schedule_active,
+    delete_schedule_db, get_all_active_schedules,
 )
 from .tools.error_handler import friendly_error
 from .tools.export_formats import export_markdown, export_html, format_citations
@@ -51,7 +54,16 @@ async def lifespan(app: FastAPI):
         print("✅ User tables initialized")
     except Exception as e:
         print(f"⚠️  User tables not available: {e} — using in-memory fallback")
+
+    # Start scheduler and register all active persisted schedules
+    _scheduler.start()
+    asyncio.create_task(_reload_all_schedules())
+    print("✅ Scheduler started")
+
     yield
+
+    _scheduler.shutdown(wait=False)
+    print("🛑 Scheduler stopped")
 
 
 app = FastAPI(
@@ -69,6 +81,10 @@ app.include_router(public_api_router)
 # so allow_credentials is False, which keeps the config valid and the Public API usable.
 # Override the regex via ALLOWED_ORIGIN_REGEX to add a custom domain.
 import os as _os
+from apscheduler.schedulers.asyncio import AsyncIOScheduler as _AsyncIOScheduler
+from apscheduler.triggers.cron       import CronTrigger       as _CronTrigger
+
+_scheduler = _AsyncIOScheduler(timezone="UTC")
 
 _default_origin_regex = (
     r"^https://researchmind[a-z0-9.-]*\.vercel\.app$"  # production + Vercel previews
@@ -222,6 +238,174 @@ async def _extract_entities_to_graph(
         print(f"✅ KG stored for {session_id[:8]}: {len(entities)} entities, {len(relationships)} edges")
     except Exception as e:
         print(f"⚠️  KG extraction failed for {session_id[:8]}: {e}")
+
+
+# ─── Scheduled research ──────────────────────────────────────────────────────
+
+def _register_job(sched: dict) -> None:
+    """Register (or replace) a DB schedule row as an APScheduler cron job."""
+    freq   = sched.get("frequency", "weekly")
+    job_id = sched["id"]
+
+    if freq == "daily":
+        trigger = _CronTrigger(hour=sched.get("hour", 9), minute=0, timezone="UTC")
+    elif freq == "weekly":
+        dow     = sched.get("day_of_week") or 0   # 0=mon … 6=sun
+        trigger = _CronTrigger(
+            day_of_week=dow, hour=sched.get("hour", 9), minute=0, timezone="UTC"
+        )
+    else:
+        return
+
+    _scheduler.add_job(
+        _fire_schedule,
+        trigger=trigger,
+        id=job_id,
+        kwargs={
+            "schedule_id":  sched["id"],
+            "user_id":      sched["user_id"],
+            "topic":        sched["topic"],
+            "depth":        sched.get("depth", 3),
+            "notify_email": sched.get("notify_email", True),
+        },
+        replace_existing=True,
+        misfire_grace_time=7200,   # fire even if server was down ≤ 2 hours
+    )
+    print(f"📅 Registered schedule {job_id[:8]}: '{sched['topic'][:40]}' ({freq})")
+
+
+async def _reload_all_schedules() -> None:
+    """On startup: pull every active schedule from DB and register each as a job."""
+    try:
+        schedules = await get_all_active_schedules()
+        for s in schedules:
+            _register_job(s)
+        print(f"✅ Reloaded {len(schedules)} active schedule(s)")
+    except Exception as exc:
+        print(f"⚠️  Could not reload schedules: {exc}")
+
+
+async def _fire_schedule(
+    schedule_id: str, user_id: str, topic: str,
+    depth: int = 3, notify_email: bool = True,
+) -> None:
+    """Called by APScheduler when a cron job fires.
+    Creates a new session and kicks off the full pipeline in the background.
+    """
+    print(f"🔔 Schedule firing: '{topic[:50]}' (id={schedule_id[:8]})")
+    session_id = str(uuid.uuid4())
+    await _create(session_id, topic, user_id=user_id)
+    await update_schedule_run(schedule_id, session_id)
+    asyncio.create_task(
+        _run_pipeline_bg(session_id, topic, depth, user_id, notify_email)
+    )
+
+
+async def _run_pipeline_bg(
+    session_id: str, topic: str, depth: int,
+    user_id: str, notify_email: bool = False,
+) -> None:
+    """Run the 4-agent research pipeline without SSE.
+
+    Used by the scheduler so the full pipeline runs in a background task.
+    Mirrors the SSE stream_research handler but yields to no HTTP client.
+    """
+    all_sources: list = []
+    sub_questions: list = []
+
+    try:
+        # ① Orchestrate
+        async for event in orchestrate(topic, depth):
+            if event.data and "sub_questions" in event.data:
+                sub_questions = event.data["sub_questions"]
+        if not sub_questions:
+            sub_questions = [topic]
+
+        # ② Search
+        async for _ev, sources in search(sub_questions):
+            all_sources.extend(sources)
+
+        # ③ Read (top 6 by relevance)
+        top_src = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
+        enriched: list = []
+        async for _ev, source in read_sources(top_src):
+            enriched.append(source)
+
+        # ④ Synthesize
+        report_dict = None
+        async for _ev, report in synthesize(topic, session_id, enriched, sub_questions):
+            if report:
+                seen: set = set()
+                unique: list = []
+                for s in enriched:
+                    t = s.title.lower().strip() if hasattr(s, "title") else ""
+                    if t not in seen:
+                        unique.append(s)
+                        seen.add(t)
+                report_dict = report.model_dump()
+                report_dict["sources"] = [s.model_dump() for s in unique]
+
+        if report_dict:
+            await _update(session_id, "completed", report_dict)
+            await cache_research(topic, report_dict)
+            asyncio.create_task(_auto_tag_session(session_id, topic, report_dict, user_id))
+            asyncio.create_task(_extract_entities_to_graph(session_id, report_dict, user_id))
+            if notify_email:
+                asyncio.create_task(_send_schedule_ready_email(user_id, topic, session_id))
+            print(f"✅ Scheduled pipeline done: {session_id[:8]} — {topic[:40]}")
+        else:
+            await _update(session_id, "failed")
+
+    except Exception as exc:
+        print(f"❌ Scheduled pipeline error ({session_id[:8]}): {exc}")
+        await _update(session_id, "failed")
+
+
+async def _send_schedule_ready_email(
+    user_id: str, topic: str, session_id: str
+) -> None:
+    """Email the session owner when their scheduled research is ready."""
+    try:
+        from .auth.user_db import get_user_by_id
+        from .tools.email  import send_email, email_configured
+        from .config       import FRONTEND_URL
+
+        if not email_configured():
+            return
+        user = await get_user_by_id(user_id)
+        if not user or not user.get("email"):
+            return
+
+        name        = user.get("name") or user["email"].split("@")[0]
+        report_url  = f"{FRONTEND_URL}/research/{session_id}"
+        sched_url   = f"{FRONTEND_URL}/schedules"
+
+        html = f"""\
+<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;
+            margin:0 auto;padding:24px;color:#0f172a">
+  <div style="text-align:center;margin-bottom:20px">
+    <span style="font-size:22px;font-weight:700;color:#6366f1">✨ ResearchMind</span>
+  </div>
+  <h2 style="font-size:18px;margin:0 0 8px">Your scheduled research is ready 🎉</h2>
+  <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 20px">
+    Hi {name}, your scheduled research on
+    <strong>&ldquo;{topic}&rdquo;</strong> has completed.
+  </p>
+  <div style="text-align:center;margin:24px 0">
+    <a href="{report_url}"
+       style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;
+              font-weight:600;font-size:14px;padding:12px 28px;border-radius:10px">
+      View Report →
+    </a>
+  </div>
+  <p style="font-size:12px;color:#94a3b8;margin:16px 0 0">
+    Manage your schedules at
+    <a href="{sched_url}" style="color:#6366f1">{sched_url}</a>
+  </p>
+</div>"""
+        await send_email(user["email"], f"Research ready: {topic[:60]}", html)
+    except Exception as exc:
+        print(f"⚠️  Schedule email failed: {exc}")
 
 
 # ─── Chat with report ────────────────────────────────────────────────────────
@@ -1044,6 +1228,116 @@ async def revoke_share_link(session_id: str, share_token: str, user: dict = Depe
         raise HTTPException(status_code=404, detail="Share link not found")
 
     return {"success": True, "message": "Share link revoked"}
+
+
+# ─── Schedule endpoints ──────────────────────────────────────────────────────
+
+class _ScheduleCreate(_BaseModel):
+    topic: str
+    frequency: str = "weekly"    # "daily" | "weekly"
+    day_of_week: int = 0          # 0=Mon … 6=Sun  (weekly only)
+    hour: int = 9                 # UTC hour 0–23
+    depth: int = 3
+    notify_email: bool = True
+
+class _ScheduleToggle(_BaseModel):
+    is_active: bool
+
+
+@app.get("/schedules")
+async def list_schedules(current_user: dict = Depends(get_current_user)):
+    """List all schedules for the authenticated user."""
+    schedules = await list_schedules_db(current_user["id"])
+    return {"schedules": schedules}
+
+
+@app.post("/schedules")
+async def create_schedule(
+    body: _ScheduleCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new recurring schedule. Registers it immediately with APScheduler."""
+    if body.frequency not in ("daily", "weekly"):
+        raise HTTPException(status_code=400, detail="frequency must be 'daily' or 'weekly'")
+    if not body.topic.strip():
+        raise HTTPException(status_code=400, detail="topic cannot be empty")
+
+    sched = await create_schedule_db(
+        user_id      = current_user["id"],
+        topic        = body.topic.strip(),
+        frequency    = body.frequency,
+        hour         = max(0, min(23, body.hour)),
+        day_of_week  = max(0, min(6,  body.day_of_week)),
+        depth        = max(1, min(5,  body.depth)),
+        notify_email = body.notify_email,
+    )
+    if not sched:
+        raise HTTPException(status_code=500, detail="Failed to create schedule")
+
+    _register_job(sched)
+    return sched
+
+
+@app.patch("/schedules/{schedule_id}")
+async def toggle_schedule(
+    schedule_id: str,
+    body: _ScheduleToggle,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pause or resume a schedule."""
+    sched = await toggle_schedule_active(schedule_id, current_user["id"], body.is_active)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    if body.is_active:
+        _register_job(sched)
+    else:
+        try:
+            _scheduler.remove_job(schedule_id)
+        except Exception:
+            pass    # already removed or never registered
+
+    return sched
+
+
+@app.delete("/schedules/{schedule_id}")
+async def delete_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Permanently delete a schedule."""
+    ok = await delete_schedule_db(schedule_id, current_user["id"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    try:
+        _scheduler.remove_job(schedule_id)
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@app.post("/schedules/{schedule_id}/run")
+async def run_schedule_now(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Trigger an immediate run of a schedule (ignores the cron time)."""
+    sched = await get_schedule_db(schedule_id)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if sched["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your schedule")
+
+    session_id = str(uuid.uuid4())
+    await _create(session_id, sched["topic"], user_id=current_user["id"])
+    await update_schedule_run(schedule_id, session_id)
+    asyncio.create_task(
+        _run_pipeline_bg(
+            session_id, sched["topic"], sched.get("depth", 3),
+            current_user["id"], sched.get("notify_email", True),
+        )
+    )
+    return {"session_id": session_id, "topic": sched["topic"], "status": "triggered"}
 
 
 # ─── Collections (named folders) ─────────────────────────────────────────────
