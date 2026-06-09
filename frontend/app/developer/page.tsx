@@ -21,7 +21,7 @@ interface ApiKey {
 
 function _authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("auth_token");
+  const token = localStorage.getItem("rm_access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
