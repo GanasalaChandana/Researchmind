@@ -26,16 +26,20 @@ function _authHeaders(): Record<string, string> {
 }
 
 async function fetchKeys(): Promise<ApiKey[]> {
-  const res = await fetch("/api/apikeys", { headers: _authHeaders(), cache: "no-store" });
+  const headers = _authHeaders();
+  if (!headers["Authorization"]) return []; // no token — skip request
+  const res = await fetch("/api/apikeys", { headers, cache: "no-store" });
   if (!res.ok) return [];
   const data = await res.json();
   return data.keys ?? [];
 }
 
 async function createKey(name: string): Promise<{ key: string; id: string; key_prefix: string; name: string; created_at: string } | null> {
+  const headers = _authHeaders();
+  if (!headers["Authorization"]) return null; // no token — skip request
   const res = await fetch("/api/apikeys", {
     method: "POST",
-    headers: { ...(_authHeaders()), "Content-Type": "application/json" },
+    headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
   if (!res.ok) return null;
