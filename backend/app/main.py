@@ -450,12 +450,14 @@ def _build_llm_messages(context: str, history: list[dict], topic: str) -> list[d
     system = {
         "role": "system",
         "content": (
-            f"You are an expert AI assistant helping a user explore a research report on '{topic}'. "
-            "Answer questions based ONLY on the report content provided. "
-            "If the question falls outside the report scope, say so clearly. "
-            "When referencing facts, cite the source like [Source 1]. "
-            "Be concise and precise. Do not hallucinate facts.\n\n"
-            f"--- REPORT CONTENT ---\n{context}\n--- END REPORT ---"
+            f"You are an expert AI research assistant helping a user explore the topic '{topic}'. "
+            "You have access to a research report (below) AND your own general knowledge.\n\n"
+            "Rules:\n"
+            "1. When answering from the report, cite sources like [Source 1].\n"
+            "2. When using your general knowledge (not in the report), prefix with 'Based on general knowledge:'.\n"
+            "3. If the question is about something the report briefly covers, supplement it with what you know.\n"
+            "4. Be helpful, concise, and accurate. Never refuse to answer — always provide the best answer you can.\n\n"
+            f"--- RESEARCH REPORT ---\n{context}\n--- END REPORT ---"
         ),
     }
     msgs: list[dict] = [system]
