@@ -14,7 +14,7 @@ import {
   CheckCircle2, XCircle, Loader2, Filter,
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
   SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3, Code2, CalendarClock, Webhook, Link2,
-  FolderOpen, Plus, Check, FolderPlus,
+  FolderOpen, Plus, Check, FolderPlus, Brain, Network, FileText, Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -384,9 +384,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12 relative overflow-x-hidden">
+
+      {/* ── Animated background orbs ── */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+        <div className="absolute -top-60 -right-60 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-60 -left-60 w-[600px] h-[600px] bg-violet-500/8 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s", animationDuration: "4s" }} />
+        <div className="absolute top-1/3 left-1/4 w-72 h-72 bg-brand-400/6 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "3s", animationDuration: "5s" }} />
+      </div>
+
       {/* Top bar: Auth + Theme — fixed so it stays visible on scroll */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-3 backdrop-blur-sm dark:bg-slate-950/70 bg-white/70 border-b dark:border-white/5 border-slate-200/60">
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-3 backdrop-blur-md dark:bg-slate-950/80 bg-white/80 border-b dark:border-white/5 border-slate-200/60">
         <div className="flex items-center gap-2">
         {isAuthenticated ? (
           <div className="flex items-center gap-2">
@@ -417,51 +425,38 @@ export default function HomePage() {
         )}
         {isAuthenticated && (
           <>
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              title="View analytics dashboard"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </button>
-            <button
-              onClick={() => router.push("/developer")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              title="Developer API & keys"
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">API</span>
-            </button>
-            <button
-              onClick={() => router.push("/schedules")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              title="Scheduled research"
-            >
-              <CalendarClock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Schedules</span>
-            </button>
-            <button
-              onClick={() => router.push("/webhooks")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              title="Webhook notifications"
-            >
-              <Webhook className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Webhooks</span>
-            </button>
-            <button
-              onClick={() => router.push("/chains")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              title="Research chains"
-            >
-              <Link2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Chains</span>
-            </button>
+            <div className="hidden sm:flex items-center gap-0.5 bg-white/5 rounded-lg p-0.5 border border-white/8">
+              {[
+                { icon: <BarChart3    className="w-3.5 h-3.5" />, label: "Dashboard", path: "/dashboard",  title: "Analytics" },
+                { icon: <Code2        className="w-3.5 h-3.5" />, label: "API",       path: "/developer",  title: "Developer API" },
+                { icon: <CalendarClock className="w-3.5 h-3.5"/>, label: "Schedules", path: "/schedules",  title: "Scheduled research" },
+                { icon: <Webhook      className="w-3.5 h-3.5" />, label: "Webhooks",  path: "/webhooks",   title: "Webhooks" },
+                { icon: <Link2        className="w-3.5 h-3.5" />, label: "Chains",    path: "/chains",     title: "Research chains" },
+              ].map(nav => (
+                <button
+                  key={nav.path}
+                  onClick={() => router.push(nav.path)}
+                  title={nav.title}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  {nav.icon}
+                  <span>{nav.label}</span>
+                </button>
+              ))}
+            </div>
+            {/* Mobile: just icons */}
+            <div className="flex sm:hidden items-center gap-1">
+              {[
+                { icon: <BarChart3    className="w-4 h-4" />, path: "/dashboard",  title: "Dashboard" },
+                { icon: <CalendarClock className="w-4 h-4"/>, path: "/schedules",  title: "Schedules" },
+                { icon: <Link2        className="w-4 h-4" />, path: "/chains",     title: "Chains" },
+              ].map(nav => (
+                <button key={nav.path} onClick={() => router.push(nav.path)} title={nav.title}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
+                  {nav.icon}
+                </button>
+              ))}
+            </div>
           </>
         )}
         <button
@@ -503,29 +498,81 @@ export default function HomePage() {
         className="w-full max-w-2xl"
         onClick={() => { setOpenMenu(null); setShowSuggestions(false); }}
       >
-        {/* Logo */}
-        <div className="text-center mb-6 sm:mb-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-brand-500/20 border border-brand-500/30 mb-3 sm:mb-4">
-            <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-brand-500" />
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold dark:text-white text-slate-900 mb-2">ResearchMind</h1>
-          <p className="dark:text-slate-400 text-slate-600 text-sm sm:text-base">Multi-agent AI research. Enter a topic, watch the agents work.</p>
+        {/* ── Hero ── */}
+        <div className="text-center mb-8 sm:mb-12">
+          <motion.div
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 180, damping: 14 }}
+            className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-brand-500/30 via-brand-500/20 to-violet-500/20 border border-brand-500/40 mb-5 shadow-2xl shadow-brand-500/20"
+          >
+            <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-brand-400" />
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-4xl sm:text-5xl font-black tracking-tight mb-3"
+          >
+            <span className="bg-gradient-to-r from-white via-slate-200 to-brand-300 bg-clip-text text-transparent dark:from-white dark:via-slate-200 dark:to-brand-300 from-slate-900 via-slate-700 to-brand-600">
+              ResearchMind
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18 }}
+            className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed"
+          >
+            Multi-agent AI that{" "}
+            <span className="text-brand-400 font-medium">searches</span>,{" "}
+            <span className="text-violet-400 font-medium">reads</span>,{" "}
+            <span className="text-emerald-400 font-medium">synthesizes</span> — instantly.
+          </motion.p>
+
+          {/* Live capability dots */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.28 }}
+            className="flex items-center justify-center gap-5 mt-4 text-xs text-slate-500"
+          >
+            {[
+              { dot: "bg-brand-400",   label: "4 AI agents" },
+              { dot: "bg-violet-400",  label: "Knowledge graph" },
+              { dot: "bg-emerald-400", label: "Instant reports" },
+              { dot: "bg-amber-400",   label: "Research chains" },
+            ].map(({ dot, label }) => (
+              <span key={label} className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${dot} shadow-sm`} />
+                {label}
+              </span>
+            ))}
+          </motion.div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="glass rounded-2xl p-4 sm:p-6 space-y-4">
+        <motion.form
+          onSubmit={handleSubmit}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="glass rounded-2xl p-4 sm:p-6 space-y-4 border dark:border-white/8 border-slate-200/80 shadow-xl dark:shadow-brand-500/5"
+        >
           {/* Custom Prompts */}
           <PromptCustomizer onSelectPrompt={setCustomPrompts} />
 
-          <div className="relative" onClick={e => e.stopPropagation()}>
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 z-10" />
+          <div className="relative group" onClick={e => e.stopPropagation()}>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 z-10 group-focus-within:text-brand-400 transition-colors" />
             <input
               ref={inputRef}
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               placeholder="What do you want to research?"
-              className="w-full dark:bg-white/5 bg-slate-50 dark:border-white/10 border-slate-200 rounded-xl pl-12 pr-4 py-3 sm:py-4 dark:text-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 transition-colors text-base sm:text-lg"
+              className="w-full dark:bg-white/5 bg-slate-50 dark:border-white/10 border-slate-200 rounded-xl pl-12 pr-4 py-3.5 sm:py-4 dark:text-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/60 dark:focus:border-brand-500/60 focus:shadow-lg focus:shadow-brand-500/10 transition-all text-base sm:text-lg"
               autoFocus
               autoComplete="off"
             />
@@ -555,24 +602,33 @@ export default function HomePage() {
             </AnimatePresence>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            <label className="text-sm text-slate-400 shrink-0">Depth</label>
-            <input
-              type="range" min={2} max={5} value={depth}
-              onChange={(e) => setDepth(Number(e.target.value))}
-              className="flex-1 accent-brand-500"
-            />
-            <span className="text-sm text-slate-300 shrink-0">{depth} questions</span>
+          {/* Depth control */}
+          <div className="flex items-center gap-3 sm:gap-4 px-1">
+            <label className="text-sm text-slate-400 shrink-0 w-12">Depth</label>
+            <div className="flex-1 relative">
+              <input
+                type="range" min={2} max={5} value={depth}
+                onChange={(e) => setDepth(Number(e.target.value))}
+                className="w-full accent-brand-500 h-1.5 rounded-full"
+              />
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white tabular-nums">{depth}</span>
+              <span className="text-xs text-slate-500">questions</span>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading || !topic.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 sm:py-3.5 rounded-xl transition-colors text-sm sm:text-base"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 hover:scale-[1.01] active:scale-[0.99] text-sm sm:text-base"
           >
-            {loading ? <>Launching agents...</> : <>Start Research <ChevronRight className="w-4 h-4" /></>}
+            {loading
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Launching agents…</>
+              : <><Zap className="w-4 h-4" /> Start Research <ChevronRight className="w-4 h-4 ml-1" /></>
+            }
           </button>
-        </form>
+        </motion.form>
 
         {/* Compare link */}
         <div className="mt-3 flex justify-end">
@@ -587,26 +643,49 @@ export default function HomePage() {
 
         {/* Examples */}
         <div className="mt-5">
-          <p className="text-xs text-slate-500 mb-3 text-center">Try an example</p>
+          <p className="text-xs text-slate-500 mb-3 text-center tracking-wide uppercase font-medium">Try an example</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {EXAMPLE_TOPICS.map((t) => (
-              <button
+              <motion.button
                 key={t}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={() => setTopic(t)}
-                className="text-xs glass px-3 py-1.5 rounded-full dark:text-slate-300 text-slate-600 hover:text-brand-500 hover:border-brand-500/50 transition-colors"
+                className="text-xs glass px-3.5 py-1.5 rounded-full dark:text-slate-300 text-slate-600 hover:text-brand-400 hover:border-brand-500/40 hover:bg-brand-500/5 transition-all border border-transparent"
               >
                 {t}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
 
+        {/* ── Capability cards ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2"
+        >
+          {[
+            { icon: <Brain    className="w-4 h-4" />, label: "4 AI Agents",       sub: "Orchestrate → Search → Read → Synthesize", color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
+            { icon: <Network  className="w-4 h-4" />, label: "Knowledge Graph",   sub: "Entities & relationships across sessions",  color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
+            { icon: <FileText className="w-4 h-4" />, label: "Instant Reports",   sub: "Structured reports with citations",         color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
+            { icon: <Link2    className="w-4 h-4" />, label: "Research Chains",   sub: "Auto-queue follow-up topics in series",     color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
+          ].map(f => (
+            <div key={f.label} className={`flex flex-col gap-1.5 p-3 rounded-xl border ${f.bg} transition-all hover:scale-[1.02]`}>
+              <span className={f.color}>{f.icon}</span>
+              <p className="text-xs font-semibold dark:text-white text-slate-800">{f.label}</p>
+              <p className="text-[10px] dark:text-slate-500 text-slate-500 leading-snug hidden sm:block">{f.sub}</p>
+            </div>
+          ))}
+        </motion.div>
+
         {/* History — always shown when authenticated */}
         {isAuthenticated && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
             className="mt-10"
           >
             {/* History header */}
@@ -923,16 +1002,24 @@ export default function HomePage() {
                     {totalSessions === 0 ? (
                       /* First-time empty state */
                       <div className="space-y-4">
-                        <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto">
-                          <Sparkles className="w-6 h-6 text-brand-400" />
-                        </div>
+                        <motion.div
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                          className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500/20 to-violet-500/10 border border-brand-500/20 flex items-center justify-center mx-auto shadow-lg shadow-brand-500/10"
+                        >
+                          <Sparkles className="w-7 h-7 text-brand-400" />
+                        </motion.div>
                         <div>
-                          <p className="text-sm font-medium dark:text-slate-300 text-slate-700 mb-1">No research yet</p>
-                          <p className="text-xs dark:text-slate-500 text-slate-500">Type a topic above and hit <span className="text-brand-400 font-medium">Start Research</span> to create your first report.</p>
+                          <p className="text-base font-semibold dark:text-slate-200 text-slate-700 mb-1.5">Start your first research</p>
+                          <p className="text-xs dark:text-slate-500 text-slate-500 max-w-xs mx-auto">
+                            Type any topic above and hit{" "}
+                            <span className="text-brand-400 font-medium">Start Research</span>.
+                            4 AI agents will search, read, and synthesize a full report for you.
+                          </p>
                         </div>
                         <button
                           onClick={() => setShowOnboarding(true)}
-                          className="inline-flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 transition-colors"
                         >
                           <Sparkles className="w-3 h-3" /> See what ResearchMind can do
                         </button>
@@ -954,18 +1041,18 @@ export default function HomePage() {
                       {/* Card */}
                       <div
                         onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
-                        className="relative rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.06] hover:bg-slate-50 hover:border-indigo-400/40 dark:hover:border-indigo-500/30 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-md"
+                        className="relative rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.07] hover:bg-slate-50/80 dark:hover:border-white/15 hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-lg dark:hover:shadow-brand-500/5 hover:translate-y-[-1px]"
                       >
                         {/* Left status accent bar */}
-                        <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl ${
-                          s.status === "completed" ? "bg-emerald-400" :
+                        <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl transition-all duration-200 ${
+                          s.status === "completed" ? "bg-emerald-400 group-hover:shadow-sm group-hover:shadow-emerald-400/50" :
                           s.status === "failed"    ? "bg-red-400" :
-                                                     "bg-indigo-400"
+                                                     "bg-brand-400 animate-pulse"
                         }`} />
 
                         <div className="pl-5 pr-24 py-4">
                           {/* Topic */}
-                          <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-2 line-clamp-2">
+                          <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-2 line-clamp-2 group-hover:dark:text-white transition-colors">
                             {s.topic}
                           </h3>
 
@@ -974,7 +1061,7 @@ export default function HomePage() {
                             <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                               s.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
                               s.status === "failed"    ? "bg-red-500/15 text-red-400" :
-                                                         "bg-indigo-500/15 text-indigo-400"
+                                                         "bg-brand-500/15 text-brand-400"
                             }`}>
                               <StatusIcon status={s.status} />
                               <span className="capitalize">{s.status}</span>
