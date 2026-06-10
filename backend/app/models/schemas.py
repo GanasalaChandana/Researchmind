@@ -28,6 +28,9 @@ class Source(BaseModel):
     title: str
     summary: str
     relevance_score: float = 0.0
+    quality_score: float = 0.0      # 0-100 composite score
+    domain_authority: str = ""      # "high" | "medium" | "low"
+    recency_score: float = 0.0      # 0-1 based on URL/title date signals
 
 
 class Entity(BaseModel):

@@ -11,6 +11,9 @@ export interface Source {
   title: string;
   summary: string;
   relevance_score: number;
+  quality_score?: number;       // 0–100 composite
+  domain_authority?: string;    // "high" | "medium" | "low"
+  recency_score?: number;       // 0–1
 }
 
 export interface Entity {

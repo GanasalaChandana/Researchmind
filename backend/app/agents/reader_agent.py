@@ -2,6 +2,7 @@ from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source
 from ..tools.url_reader import read_url
+from ..tools.source_scorer import score_source
 from ..config import GROQ_API_KEY
 
 
@@ -43,9 +44,15 @@ Return only the summary, no preamble."""
             if not source.summary:
                 source.summary = f"Unable to fetch full content. URL: {source.url}"
 
+        # Score the source after reading
+        scores = score_source(source.url, source.title or "")
+        source.quality_score = scores["quality_score"]
+        source.domain_authority = scores["domain_authority"]
+        source.recency_score = scores["recency_score"]
+
         yield AgentEvent(
             type="reading",
             agent="reader_agent",
             message=f"Summarized: {source.title or source.url}",
-            data={"url": source.url, "summary": source.summary},
+            data={"url": source.url, "summary": source.summary, "quality_score": source.quality_score},
         ), source

@@ -326,22 +326,85 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
       <div>
         <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-4">Sources ({uniqueSources.length})</h2>
         <div className="space-y-3">
-          {uniqueSources.map((source, i) => (
-            <div key={i} className="glass rounded-lg p-4 flex gap-4">
-              <span className="text-brand-400 font-mono text-sm shrink-0 mt-0.5">[{i + 1}]</span>
-              <div className="min-w-0">
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-blue-400 hover:text-blue-300 truncate block"
-                >
-                  {source.title || source.url}
-                </a>
-                <p className="text-xs dark:text-slate-400 text-slate-500 mt-1 line-clamp-2">{source.summary}</p>
+          {uniqueSources.map((source, i) => {
+            const q = source.quality_score ?? 0;
+            const tier = source.domain_authority ?? "low";
+            const hasScore = (source.quality_score ?? 0) > 0;
+
+            const TIER_META: Record<string, { label: string; bar: string; pill: string }> = {
+              high:   { label: "High authority",   bar: "bg-emerald-400", pill: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+              medium: { label: "Medium authority",  bar: "bg-amber-400",   pill: "bg-amber-500/10  text-amber-400  border-amber-500/20"  },
+              low:    { label: "Low authority",     bar: "bg-slate-500",   pill: "bg-slate-500/10  text-slate-400  border-slate-500/20"  },
+            };
+            const tierMeta = TIER_META[tier] ?? { label: "Unknown", bar: "bg-slate-500", pill: "bg-slate-500/10 text-slate-400 border-slate-500/20" };
+
+            return (
+              <div key={i} className="glass rounded-xl overflow-hidden">
+                {/* Quality bar — thin colored top border */}
+                {hasScore && (
+                  <div className="h-0.5 w-full bg-white/5">
+                    <div className={`h-full ${tierMeta.bar} transition-all`} style={{ width: `${q}%` }} />
+                  </div>
+                )}
+
+                <div className="p-4 flex gap-4">
+                  <span className="text-brand-400 font-mono text-sm shrink-0 mt-0.5">[{i + 1}]</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-400 hover:text-blue-300 line-clamp-1 flex-1"
+                      >
+                        {source.title || source.url}
+                      </a>
+                      {/* Quality badges */}
+                      {hasScore && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${tierMeta.pill}`}>
+                            {tierMeta.label}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold dark:text-slate-400 text-slate-500" title="Quality score (0–100)">
+                            {Math.round(q)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-xs dark:text-slate-400 text-slate-500 line-clamp-2 leading-relaxed">{source.summary}</p>
+
+                    {/* Recency signal */}
+                    {hasScore && source.recency_score !== undefined && (
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] dark:text-slate-600 text-slate-400">Recency</span>
+                          <div className="w-16 h-1 rounded-full bg-white/8 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                source.recency_score > 0.7 ? "bg-emerald-400" :
+                                source.recency_score > 0.4 ? "bg-amber-400" : "bg-slate-500"
+                              }`}
+                              style={{ width: `${source.recency_score * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] dark:text-slate-600 text-slate-400">Quality</span>
+                          <div className="w-16 h-1 rounded-full bg-white/8 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${tierMeta.bar}`}
+                              style={{ width: `${q}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
