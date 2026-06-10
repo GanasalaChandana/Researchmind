@@ -7,7 +7,7 @@ from ..models.schemas import AgentEvent
 from ..config import GROQ_API_KEY
 
 
-async def orchestrate(topic: str, depth: int) -> AsyncGenerator[AgentEvent, None]:
+async def orchestrate(topic: str, depth: int, language: str = "English") -> AsyncGenerator[AgentEvent, None]:
     client = Groq(api_key=GROQ_API_KEY)
 
     yield AgentEvent(
@@ -16,9 +16,14 @@ async def orchestrate(topic: str, depth: int) -> AsyncGenerator[AgentEvent, None
         message=f'Analyzing topic: "{topic}"',
     )
 
+    lang_instruction = (
+        f"\nIMPORTANT: Write all sub_questions and research_angle in {language}."
+        if language != "English" else ""
+    )
+
     prompt = f"""You are a research orchestrator. Break this research topic into {depth} specific sub-questions that together give a comprehensive understanding.
 
-Topic: {topic}
+Topic: {topic}{lang_instruction}
 
 Return a JSON object with this exact structure:
 {{

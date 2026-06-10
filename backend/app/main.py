@@ -30,6 +30,7 @@ from .database import (
     delete_schedule_db, get_all_active_schedules,
 )
 from .tools.error_handler import friendly_error
+from .tools.language_detect import detect_language
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
     register_webhook, list_webhooks, delete_webhook,
@@ -321,8 +322,10 @@ async def _run_pipeline_bg(
     sub_questions: list = []
 
     try:
+        language = detect_language(topic)
+
         # ① Orchestrate
-        async for event in orchestrate(topic, depth):
+        async for event in orchestrate(topic, depth, language=language):
             if event.data and "sub_questions" in event.data:
                 sub_questions = event.data["sub_questions"]
         if not sub_questions:
@@ -335,12 +338,12 @@ async def _run_pipeline_bg(
         # ③ Read (top 6 by relevance)
         top_src = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
         enriched: list = []
-        async for _ev, source in read_sources(top_src):
+        async for _ev, source in read_sources(top_src, language=language):
             enriched.append(source)
 
         # ④ Synthesize
         report_dict = None
-        async for _ev, report in synthesize(topic, session_id, enriched, sub_questions):
+        async for _ev, report in synthesize(topic, session_id, enriched, sub_questions, language=language):
             if report:
                 seen: set = set()
                 unique: list = []
@@ -913,7 +916,7 @@ async def retry_research(session_id: str):
 
 
 @app.get("/research/{session_id}/stream")
-async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None):
+async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None):
     async def event_generator():
         all_sources = []
         sub_questions = []
@@ -952,9 +955,11 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                 ).model_dump_json()}
                 return
 
+            lang = language if language else detect_language(topic)
+
             # Phase 1: Orchestrator (skip if custom prompts provided)
             if not sub_questions:
-                async for event in orchestrate(topic, depth):
+                async for event in orchestrate(topic, depth, language=lang):
                     if event.data and "sub_questions" in event.data:
                         sub_questions = event.data["sub_questions"]
                     yield {"data": event.model_dump_json()}
@@ -972,13 +977,13 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
             # Phase 3: Read sources (top 6 by relevance)
             top_sources = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
             enriched_sources = []
-            async for event, source in read_sources(top_sources):
+            async for event, source in read_sources(top_sources, language=lang):
                 enriched_sources.append(source)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
             # Phase 4: Synthesize
-            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions):
+            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang):
                 if report:
                     # Deduplicate sources by title before saving (final safety check)
                     seen_titles = set()

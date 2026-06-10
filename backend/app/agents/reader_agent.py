@@ -6,7 +6,7 @@ from ..tools.source_scorer import score_source
 from ..config import GROQ_API_KEY
 
 
-async def read_sources(sources: list[Source]) -> AsyncGenerator[tuple[AgentEvent, Source], None]:
+async def read_sources(sources: list[Source], language: str = "English") -> AsyncGenerator[tuple[AgentEvent, Source], None]:
     client = Groq(api_key=GROQ_API_KEY)
 
     for source in sources:
@@ -20,7 +20,8 @@ async def read_sources(sources: list[Source]) -> AsyncGenerator[tuple[AgentEvent
 
         # Always update summary, even if content is empty
         if content:
-            prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points.
+            lang_instruction = f" Write the summary in {language}." if language != "English" else ""
+            prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points.{lang_instruction}
 
 Title: {source.title}
 Content:

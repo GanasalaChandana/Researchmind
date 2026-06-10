@@ -13,6 +13,7 @@ async def synthesize(
     session_id: str,
     sources: list[Source],
     sub_questions: list[str],
+    language: str = "English",
 ) -> AsyncGenerator[tuple[AgentEvent, ResearchReport | None], None]:
     client = Groq(api_key=GROQ_API_KEY)
 
@@ -27,6 +28,8 @@ async def synthesize(
         for i, s in enumerate(sources)
         if s.summary
     )
+
+    lang_instruction = f"\nIMPORTANT: Write all text in {language}." if language != "English" else ""
 
     # Step 1: Extract knowledge graph
     kg_prompt = f"""Extract a knowledge graph from these research sources about: {topic}
@@ -45,7 +48,7 @@ Return a JSON object:
 }}
 
 Entity types: concept, person, organization, event, technology
-Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown."""
+Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -99,7 +102,7 @@ Return a JSON object:
   ]
 }}
 
-Write 4-5 sections. Return only valid JSON, no markdown fences."""
+Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
 
     report_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",

@@ -1,0 +1,229 @@
+"use client";
+
+import React, { createContext, useContext, useState, ReactNode } from "react";
+
+export type SupportedLanguage = "English" | "Spanish" | "French" | "German" | "Hindi";
+
+export const LANGUAGES: { code: SupportedLanguage; label: string; native: string }[] = [
+  { code: "English", label: "English", native: "English" },
+  { code: "Spanish", label: "Spanish", native: "Español" },
+  { code: "French",  label: "French",  native: "Français" },
+  { code: "German",  label: "German",  native: "Deutsch" },
+  { code: "Hindi",   label: "Hindi",   native: "हिन्दी" },
+];
+
+type Translations = typeof EN;
+
+const EN = {
+  heroTagline1: "Research anything with",
+  heroTaglineRotating: ["AI agents", "deep analysis", "cited sources", "real insights"],
+  heroSub: "Multi-agent AI that searches, reads, and synthesizes research so you don't have to.",
+  inputPlaceholder: "Enter a research topic…",
+  startResearch: "Start Research",
+  recentResearch: "Recent Research",
+  signIn: "Sign in",
+  signUp: "Sign up",
+  signOut: "Sign out",
+  tour: "Take a tour",
+  newResearch: "New Research",
+  howItWorks: "How it works",
+  step1Title: "Define Topic",
+  step1Desc: "Type any research question or topic",
+  step2Title: "AI Searches",
+  step2Desc: "Agents find and read relevant sources",
+  step3Title: "Synthesize",
+  step3Desc: "LLM writes a structured report",
+  step4Title: "Explore",
+  step4Desc: "Interact with the report and knowledge graph",
+  readyToStart: "Ready to start researching?",
+  guestCta: "Join thousands of researchers using ResearchMind to accelerate their work.",
+  getStarted: "Get started free",
+  capabilities: "What ResearchMind can do",
+  cap1Title: "Multi-source synthesis",
+  cap1Desc: "Reads and cross-references dozens of sources automatically",
+  cap2Title: "Citation tracking",
+  cap2Desc: "Every claim is linked to its source for full transparency",
+  cap3Title: "Knowledge graph",
+  cap3Desc: "Visualize entity relationships across the research",
+  cap4Title: "Export & share",
+  cap4Desc: "Download as Markdown, HTML, or share a public link",
+  researchInLanguage: (lang: string) => `Researching in ${lang}`,
+};
+
+const ES: Translations = {
+  heroTagline1: "Investiga cualquier cosa con",
+  heroTaglineRotating: ["agentes IA", "análisis profundo", "fuentes citadas", "ideas reales"],
+  heroSub: "IA multi-agente que busca, lee y sintetiza investigación por ti.",
+  inputPlaceholder: "Introduce un tema de investigación…",
+  startResearch: "Iniciar investigación",
+  recentResearch: "Investigaciones recientes",
+  signIn: "Iniciar sesión",
+  signUp: "Registrarse",
+  signOut: "Cerrar sesión",
+  tour: "Ver demostración",
+  newResearch: "Nueva investigación",
+  howItWorks: "Cómo funciona",
+  step1Title: "Define el tema",
+  step1Desc: "Escribe cualquier pregunta o tema de investigación",
+  step2Title: "IA busca",
+  step2Desc: "Los agentes encuentran y leen fuentes relevantes",
+  step3Title: "Sintetiza",
+  step3Desc: "El LLM escribe un informe estructurado",
+  step4Title: "Explora",
+  step4Desc: "Interactúa con el informe y el grafo de conocimiento",
+  readyToStart: "¿Listo para investigar?",
+  guestCta: "Únete a miles de investigadores que usan ResearchMind para acelerar su trabajo.",
+  getStarted: "Comienza gratis",
+  capabilities: "Qué puede hacer ResearchMind",
+  cap1Title: "Síntesis multifuente",
+  cap1Desc: "Lee y cruza docenas de fuentes automáticamente",
+  cap2Title: "Rastreo de citas",
+  cap2Desc: "Cada afirmación está vinculada a su fuente",
+  cap3Title: "Grafo de conocimiento",
+  cap3Desc: "Visualiza relaciones entre entidades",
+  cap4Title: "Exportar y compartir",
+  cap4Desc: "Descarga como Markdown, HTML o comparte un enlace",
+  researchInLanguage: (lang: string) => `Investigando en ${lang}`,
+};
+
+const FR: Translations = {
+  heroTagline1: "Recherchez tout avec",
+  heroTaglineRotating: ["agents IA", "analyse approfondie", "sources citées", "vraies découvertes"],
+  heroSub: "IA multi-agents qui cherche, lit et synthétise la recherche à votre place.",
+  inputPlaceholder: "Entrez un sujet de recherche…",
+  startResearch: "Lancer la recherche",
+  recentResearch: "Recherches récentes",
+  signIn: "Se connecter",
+  signUp: "S'inscrire",
+  signOut: "Se déconnecter",
+  tour: "Voir la démo",
+  newResearch: "Nouvelle recherche",
+  howItWorks: "Comment ça marche",
+  step1Title: "Définir le sujet",
+  step1Desc: "Tapez n'importe quelle question ou sujet",
+  step2Title: "L'IA cherche",
+  step2Desc: "Les agents trouvent et lisent des sources pertinentes",
+  step3Title: "Synthétiser",
+  step3Desc: "Le LLM rédige un rapport structuré",
+  step4Title: "Explorer",
+  step4Desc: "Interagissez avec le rapport et le graphe de connaissances",
+  readyToStart: "Prêt à commencer ?",
+  guestCta: "Rejoignez des milliers de chercheurs utilisant ResearchMind.",
+  getStarted: "Commencer gratuitement",
+  capabilities: "Ce que ResearchMind peut faire",
+  cap1Title: "Synthèse multi-sources",
+  cap1Desc: "Lit et recoupe automatiquement des dizaines de sources",
+  cap2Title: "Suivi des citations",
+  cap2Desc: "Chaque affirmation est liée à sa source",
+  cap3Title: "Graphe de connaissances",
+  cap3Desc: "Visualisez les relations entre entités",
+  cap4Title: "Exporter et partager",
+  cap4Desc: "Téléchargez en Markdown, HTML ou partagez un lien",
+  researchInLanguage: (lang: string) => `Recherche en ${lang}`,
+};
+
+const DE: Translations = {
+  heroTagline1: "Recherchieren Sie alles mit",
+  heroTaglineRotating: ["KI-Agenten", "tiefgehender Analyse", "zitierten Quellen", "echten Erkenntnissen"],
+  heroSub: "Multi-Agenten-KI, die für Sie sucht, liest und Forschung synthetisiert.",
+  inputPlaceholder: "Forschungsthema eingeben…",
+  startResearch: "Forschung starten",
+  recentResearch: "Letzte Recherchen",
+  signIn: "Anmelden",
+  signUp: "Registrieren",
+  signOut: "Abmelden",
+  tour: "Demo ansehen",
+  newResearch: "Neue Recherche",
+  howItWorks: "So funktioniert es",
+  step1Title: "Thema definieren",
+  step1Desc: "Geben Sie eine Forschungsfrage oder ein Thema ein",
+  step2Title: "KI sucht",
+  step2Desc: "Agenten finden und lesen relevante Quellen",
+  step3Title: "Synthetisieren",
+  step3Desc: "Das LLM schreibt einen strukturierten Bericht",
+  step4Title: "Erkunden",
+  step4Desc: "Interagieren Sie mit Bericht und Wissensgraph",
+  readyToStart: "Bereit zum Forschen?",
+  guestCta: "Schließen Sie sich Tausenden von Forschern an, die ResearchMind nutzen.",
+  getStarted: "Kostenlos starten",
+  capabilities: "Was ResearchMind kann",
+  cap1Title: "Mehrquellen-Synthese",
+  cap1Desc: "Liest und verknüpft automatisch Dutzende von Quellen",
+  cap2Title: "Zitatverfolgung",
+  cap2Desc: "Jede Aussage ist mit ihrer Quelle verknüpft",
+  cap3Title: "Wissensgraph",
+  cap3Desc: "Visualisieren Sie Entitätsbeziehungen",
+  cap4Title: "Exportieren & teilen",
+  cap4Desc: "Als Markdown, HTML herunterladen oder Link teilen",
+  researchInLanguage: (lang: string) => `Forschung auf ${lang}`,
+};
+
+const HI: Translations = {
+  heroTagline1: "किसी भी विषय पर शोध करें",
+  heroTaglineRotating: ["AI एजेंट्स के साथ", "गहन विश्लेषण से", "उद्धृत स्रोतों से", "असली अंतर्दृष्टि से"],
+  heroSub: "मल्टी-एजेंट AI जो आपके लिए खोजता, पढ़ता और शोध को संक्षेपित करता है।",
+  inputPlaceholder: "शोध विषय दर्ज करें…",
+  startResearch: "शोध शुरू करें",
+  recentResearch: "हाल के शोध",
+  signIn: "साइन इन",
+  signUp: "साइन अप",
+  signOut: "साइन आउट",
+  tour: "डेमो देखें",
+  newResearch: "नया शोध",
+  howItWorks: "यह कैसे काम करता है",
+  step1Title: "विषय परिभाषित करें",
+  step1Desc: "कोई भी प्रश्न या विषय टाइप करें",
+  step2Title: "AI खोजता है",
+  step2Desc: "एजेंट्स प्रासंगिक स्रोत खोजते और पढ़ते हैं",
+  step3Title: "संश्लेषण",
+  step3Desc: "LLM एक संरचित रिपोर्ट लिखता है",
+  step4Title: "अन्वेषण करें",
+  step4Desc: "रिपोर्ट और ज्ञान ग्राफ से इंटरैक्ट करें",
+  readyToStart: "शोध शुरू करने के लिए तैयार हैं?",
+  guestCta: "हजारों शोधकर्ताओं से जुड़ें जो ResearchMind का उपयोग करते हैं।",
+  getStarted: "मुफ्त में शुरू करें",
+  capabilities: "ResearchMind क्या कर सकता है",
+  cap1Title: "बहु-स्रोत संश्लेषण",
+  cap1Desc: "स्वचालित रूप से दर्जनों स्रोतों को पढ़ता और जोड़ता है",
+  cap2Title: "उद्धरण ट्रैकिंग",
+  cap2Desc: "प्रत्येक दावा अपने स्रोत से जुड़ा है",
+  cap3Title: "ज्ञान ग्राफ",
+  cap3Desc: "एंटिटी संबंधों को विज़ुअलाइज़ करें",
+  cap4Title: "निर्यात और साझा करें",
+  cap4Desc: "Markdown, HTML के रूप में डाउनलोड करें या लिंक साझा करें",
+  researchInLanguage: (lang: string) => `${lang} में शोध`,
+};
+
+const TRANSLATION_MAP: Record<SupportedLanguage, Translations> = {
+  English: EN,
+  Spanish: ES,
+  French: FR,
+  German: DE,
+  Hindi: HI,
+};
+
+interface LanguageContextValue {
+  language: SupportedLanguage;
+  setLanguage: (lang: SupportedLanguage) => void;
+  t: Translations;
+}
+
+const LanguageContext = createContext<LanguageContextValue>({
+  language: "English",
+  setLanguage: () => {},
+  t: EN,
+});
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguage] = useState<SupportedLanguage>("English");
+  const t = TRANSLATION_MAP[language];
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useLanguage() {
+  return useContext(LanguageContext);
+}

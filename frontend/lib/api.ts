@@ -27,11 +27,15 @@ export function streamResearch(
   sessionId: string,
   topic: string,
   depth = 3,
-  customPrompts?: string[]
+  customPrompts?: string[],
+  language?: string,
 ): EventSource {
   const params = new URLSearchParams({ topic, depth: String(depth) });
   if (customPrompts && customPrompts.length > 0) {
     params.append("custom_prompts", JSON.stringify(customPrompts));
+  }
+  if (language && language !== "English") {
+    params.append("language", language);
   }
   // Use Next.js API proxy to avoid Vercel SSE buffering issues
   return new EventSource(`/api/research/${sessionId}/stream?${params}`);
