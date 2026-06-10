@@ -960,7 +960,7 @@ export default function HomePage() {
                       : "glass dark:text-slate-400 text-slate-600 hover:text-brand-500"
                   }`}
                 >
-                  <FolderOpen className="w-3 h-3" /> All
+                  <FolderOpen className="w-3 h-3" /> {t.all}
                 </button>
 
                 {collections.map((c) => {
@@ -1002,7 +1002,7 @@ export default function HomePage() {
                     <input
                       value={newCollectionName}
                       onChange={(e) => setNewCollectionName(e.target.value)}
-                      placeholder="Folder name…"
+                      placeholder={t.folderName}
                       className="w-28 text-xs dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200 rounded-lg px-2.5 py-1 dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50"
                       autoFocus
                     />
@@ -1109,14 +1109,14 @@ export default function HomePage() {
                     <div>
                       <div className="flex items-center gap-1.5 mb-2">
                         <Tag className="w-3 h-3 text-slate-500" />
-                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Status</span>
+                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">{t.status}</span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
                         {(["all", "completed", "failed"] as const).map((f) => (
                           <button
                             key={f}
                             onClick={() => setStatusFilter(f)}
-                            className={`text-xs px-3 py-1 rounded-full transition-colors capitalize ${
+                            className={`text-xs px-3 py-1 rounded-full transition-colors ${
                               statusFilter === f
                                 ? f === "completed" ? "bg-emerald-500 text-white"
                                   : f === "failed" ? "bg-red-500 text-white"
@@ -1124,9 +1124,7 @@ export default function HomePage() {
                                 : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
                             }`}
                           >
-                            {f === "completed" && "✓ "}
-                            {f === "failed" && "✗ "}
-                            {f}
+                            {f === "completed" ? `✓ ${t.statusCompleted}` : f === "failed" ? `✗ ${t.statusFailed}` : t.all}
                           </button>
                         ))}
                         {/* Favorites toggle */}
@@ -1139,7 +1137,7 @@ export default function HomePage() {
                           }`}
                         >
                           <Star className={`w-3 h-3 ${favoritesOnly ? "fill-white" : ""}`} />
-                          Favorites
+                          {t.favorites}
                         </button>
                       </div>
                     </div>
@@ -1147,7 +1145,7 @@ export default function HomePage() {
                     <div>
                       <div className="flex items-center gap-1.5 mb-2">
                         <Calendar className="w-3 h-3 text-slate-500" />
-                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Date Range</span>
+                        <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">{t.dateRange}</span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
                         {([7, 30, 90, null] as const).map((days) => (
@@ -1158,7 +1156,7 @@ export default function HomePage() {
                               daysFilter === days ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
                             }`}
                           >
-                            {days ? `Last ${days}d` : "All Time"}
+                            {days === 7 ? t.last7d : days === 30 ? t.last30d : days === 90 ? t.last90d : t.allTime}
                           </button>
                         ))}
                       </div>
@@ -1168,7 +1166,7 @@ export default function HomePage() {
                       <div>
                         <div className="flex items-center gap-1.5 mb-2">
                           <Tag className="w-3 h-3 text-slate-500" />
-                          <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">Tags</span>
+                          <span className="text-xs dark:text-slate-400 text-slate-600 font-medium">{t.tags}</span>
                         </div>
                         <div className="flex gap-1.5 flex-wrap">
                           <button
@@ -1177,7 +1175,7 @@ export default function HomePage() {
                               selectedTag === null ? "bg-brand-500 text-white" : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
                             }`}
                           >
-                            All
+                            {t.all}
                           </button>
                           {userTags.map((tag) => (
                             <button
@@ -1403,7 +1401,7 @@ export default function HomePage() {
                         >
                           <input
                             type="text"
-                            placeholder="New tag..."
+                            placeholder={t.newTag}
                             value={tagInput}
                             onChange={(e) => setTagInput(e.target.value)}
                             onKeyDown={(e) => {
