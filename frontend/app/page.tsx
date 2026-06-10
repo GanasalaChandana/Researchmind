@@ -402,10 +402,10 @@ export default function HomePage() {
     const mins = Math.floor(diff / 60000);
     const hours = Math.floor(mins / 60);
     const days = Math.floor(hours / 24);
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (mins > 0) return `${mins}m ago`;
-    return "just now";
+    if (days > 0) return t.daysAgo(days);
+    if (hours > 0) return t.hoursAgo(hours);
+    if (mins > 0) return t.minutesAgo(mins);
+    return t.justNow;
   }
 
   const StatusIcon = ({ status }: { status: string }) => {
