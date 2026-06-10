@@ -4,6 +4,7 @@ import { ResearchReport } from "@/lib/types";
 import {
   ExternalLink, Download, Loader2, Share2,
   FileText, Copy, Check, BookOpen, ChevronDown,
+  ShieldCheck, ShieldAlert, ShieldX, Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { exportToPdf } from "@/lib/exportPdf";
@@ -219,6 +220,40 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
         </div>
       </div>
 
+      {/* Citation verification summary banner */}
+      {(() => {
+        const allChecks = report.sections.flatMap(s =>
+          Object.values((s as any).citation_checks ?? {})
+        ) as Array<{ status: string; reason: string }>;
+        if (allChecks.length === 0) return null;
+        const verified  = allChecks.filter(c => c.status === "verified").length;
+        const partial   = allChecks.filter(c => c.status === "partial").length;
+        const unverified = allChecks.filter(c => c.status === "unverified").length;
+        const pct = Math.round((verified / allChecks.length) * 100);
+        const barColor = pct >= 75 ? "bg-emerald-400" : pct >= 50 ? "bg-amber-400" : "bg-red-400";
+        return (
+          <div className="glass rounded-xl p-4 border dark:border-white/8 border-slate-200">
+            <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-brand-400" />
+                <span className="text-sm font-semibold dark:text-white text-slate-900">Citation Verification</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1 text-emerald-400"><ShieldCheck className="w-3 h-3" />{verified} verified</span>
+                <span className="flex items-center gap-1 text-amber-400"><ShieldAlert className="w-3 h-3" />{partial} partial</span>
+                <span className="flex items-center gap-1 text-red-400"><ShieldX className="w-3 h-3" />{unverified} unverified</span>
+              </div>
+            </div>
+            <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+              <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-[10px] dark:text-slate-500 text-slate-500 mt-1.5">
+              {pct}% of citations verified against source content · {allChecks.length} total checked
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Summary */}
       <div className="glass rounded-xl p-6 border-l-4 border-brand-500">
         <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-2">Executive Summary</h2>
@@ -242,16 +277,42 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
                 {section.citations.map((c) => {
                   const newIndex = indexMap[c - 1];
                   const source = uniqueSources[newIndex];
+                  const check = (section as any).citation_checks?.[String(c)];
+                  const statusStyle = check ? {
+                    verified:   { cls: "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/20", icon: <ShieldCheck className="w-2.5 h-2.5" /> },
+                    partial:    { cls: "bg-amber-500/15   text-amber-300   hover:bg-amber-500/25   border border-amber-500/20",   icon: <ShieldAlert  className="w-2.5 h-2.5" /> },
+                    unverified: { cls: "bg-red-500/15     text-red-300     hover:bg-red-500/25     border border-red-500/20",     icon: <ShieldX      className="w-2.5 h-2.5" /> },
+                  }[check.status as "verified" | "partial" | "unverified"] : null;
+
                   return (
-                    <a
-                      key={c}
-                      href={source?.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full hover:bg-brand-500/30 transition-colors"
-                    >
-                      [{newIndex + 1}] <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
+                    <span key={c} className="relative group/cite inline-flex items-center">
+                      <a
+                        href={source?.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                          statusStyle
+                            ? statusStyle.cls
+                            : "bg-brand-500/20 text-brand-300 hover:bg-brand-500/30"
+                        }`}
+                      >
+                        {statusStyle && statusStyle.icon}
+                        [{newIndex + 1}]
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                      {/* Tooltip on hover */}
+                      {check && (
+                        <div className="absolute bottom-full left-0 mb-1.5 w-56 glass rounded-lg p-2.5 text-xs border dark:border-white/10 border-slate-200 shadow-xl z-20 hidden group-hover/cite:block pointer-events-none">
+                          <p className={`font-semibold capitalize mb-1 ${
+                            check.status === "verified"   ? "text-emerald-400" :
+                            check.status === "partial"    ? "text-amber-400"   : "text-red-400"
+                          }`}>
+                            {check.status}
+                          </p>
+                          <p className="dark:text-slate-300 text-slate-700 leading-relaxed">{check.reason}</p>
+                        </div>
+                      )}
+                    </span>
                   );
                 })}
               </div>

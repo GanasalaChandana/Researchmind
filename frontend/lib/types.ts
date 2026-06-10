@@ -35,10 +35,16 @@ export interface KnowledgeGraph {
   relationships: Relationship[];
 }
 
+export interface CitationCheck {
+  status: "verified" | "partial" | "unverified";
+  reason: string;
+}
+
 export interface ReportSection {
   heading: string;
   content: string;
   citations: number[];
+  citation_checks?: Record<string, CitationCheck>; // keyed by citation number string
 }
 
 export interface ResearchReport {

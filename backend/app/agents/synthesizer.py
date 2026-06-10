@@ -4,6 +4,7 @@ import asyncio
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
+from ..tools.citation_verifier import verify_citations
 from ..config import GROQ_API_KEY
 
 
@@ -113,11 +114,31 @@ Write 4-5 sections. Return only valid JSON, no markdown fences."""
         match = re.search(r"\{.*\}", report_raw, re.DOTALL)
         report_data = json.loads(match.group()) if match else {"summary": "", "sections": []}
 
+    sections = report_data.get("sections", [])
+
+    # Step 3: Verify citations
+    yield AgentEvent(
+        type="synthesizing",
+        agent="synthesizer",
+        message="Verifying citations against sources…",
+    ), None
+
+    citation_checks = await verify_citations(sections, sources)
+
+    # Inject verification results into each section
+    for s_idx, section in enumerate(sections):
+        checks = {}
+        for cite_num in (section.get("citations") or []):
+            key = f"{s_idx}:{cite_num}"
+            if key in citation_checks:
+                checks[str(cite_num)] = citation_checks[key]
+        section["citation_checks"] = checks
+
     report = ResearchReport(
         session_id=session_id,
         topic=topic,
         summary=report_data.get("summary", ""),
-        sections=report_data.get("sections", []),
+        sections=sections,
         sources=sources,
         knowledge_graph=kg,
     )
