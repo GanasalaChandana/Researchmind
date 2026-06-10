@@ -753,10 +753,10 @@ export default function HomePage() {
           className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2"
         >
           {[
-            { icon: <Brain    className="w-5 h-5" />, label: "4 AI Agents",     sub: "Orchestrate · Search · Read · Synthesize", color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
-            { icon: <Network  className="w-5 h-5" />, label: "Knowledge Graph", sub: "Entities & relationships across sessions",  color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
-            { icon: <FileText className="w-5 h-5" />, label: "Instant Reports", sub: "Structured reports with citations",         color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
-            { icon: <Link2    className="w-5 h-5" />, label: "Research Chains", sub: "Auto-queue follow-up topics in series",     color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
+            { icon: <Brain    className="w-5 h-5" />, label: "4 AI Agents",     sub: "4-agent pipeline",              color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
+            { icon: <Network  className="w-5 h-5" />, label: "Knowledge Graph", sub: "Entities & relations",           color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
+            { icon: <FileText className="w-5 h-5" />, label: "Instant Reports", sub: "Cited & structured",             color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
+            { icon: <Link2    className="w-5 h-5" />, label: "Research Chains", sub: "Auto-queue follow-ups",          color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
           ].map(f => (
             <motion.div
               key={f.label}
@@ -776,20 +776,29 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.42 }}
-          className="mt-6 glass rounded-2xl p-4 sm:p-5 border dark:border-white/6 border-slate-200/60"
+          className="mt-6 glass rounded-2xl p-5 sm:p-6 border dark:border-white/6 border-slate-200/60"
         >
-          <p className="text-xs font-semibold dark:text-slate-400 text-slate-600 uppercase tracking-wider mb-4 text-center">How it works</p>
-          <div className="grid grid-cols-4 gap-2 relative">
-            {/* Connector line */}
-            <div className="absolute top-5 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-brand-500/30 via-violet-500/30 to-amber-500/30 hidden sm:block" />
+          <p className="text-xs font-semibold dark:text-slate-400 text-slate-500 uppercase tracking-wider mb-5 text-center">How it works</p>
+          <div className="grid grid-cols-4 gap-3 relative">
+            {/* Connector line — sits behind icons using absolute positioning */}
+            <div
+              className="absolute hidden sm:block h-px"
+              style={{
+                top: "20px",
+                left: "calc(12.5% + 20px)",
+                right: "calc(12.5% + 20px)",
+                background: "linear-gradient(90deg, rgba(99,102,241,0.4), rgba(139,92,246,0.4), rgba(16,185,129,0.4), rgba(245,158,11,0.4))",
+              }}
+            />
             {[
-              { step: "1", icon: <Brain    className="w-5 h-5" />, label: "Orchestrate", sub: "Breaks your topic into smart sub-questions",  color: "text-brand-400",   ring: "ring-brand-500/30",   bg: "bg-brand-500/10"   },
-              { step: "2", icon: <Search   className="w-5 h-5" />, label: "Search",      sub: "Finds the most relevant sources across the web", color: "text-violet-400", ring: "ring-violet-500/30", bg: "bg-violet-500/10" },
-              { step: "3", icon: <FileText className="w-5 h-5" />, label: "Read",        sub: "Reads and extracts key insights from each source", color: "text-emerald-400",ring: "ring-emerald-500/30",bg: "bg-emerald-500/10"},
-              { step: "4", icon: <Sparkles className="w-5 h-5" />, label: "Synthesize",  sub: "Writes a structured report with citations",       color: "text-amber-400",  ring: "ring-amber-500/30",  bg: "bg-amber-500/10"  },
+              { icon: <Brain    className="w-4 h-4" />, label: "Orchestrate", sub: "Breaks topic into sub-questions",    color: "text-brand-400",   ring: "ring-brand-500/40",   bg: "bg-brand-500/15"   },
+              { icon: <Search   className="w-4 h-4" />, label: "Search",      sub: "Finds relevant sources",             color: "text-violet-400", ring: "ring-violet-500/40", bg: "bg-violet-500/15" },
+              { icon: <FileText className="w-4 h-4" />, label: "Read",        sub: "Extracts key insights",              color: "text-emerald-400",ring: "ring-emerald-500/40",bg: "bg-emerald-500/15"},
+              { icon: <Sparkles className="w-4 h-4" />, label: "Synthesize",  sub: "Writes cited report",                color: "text-amber-400",  ring: "ring-amber-500/40",  bg: "bg-amber-500/15"  },
             ].map(s => (
-              <div key={s.step} className="flex flex-col items-center text-center gap-2 relative">
-                <div className={`w-10 h-10 rounded-xl ${s.bg} ring-1 ${s.ring} flex items-center justify-center shrink-0 z-10`}>
+              <div key={s.label} className="flex flex-col items-center text-center gap-2">
+                {/* Icon bubble — z-10 so it sits on top of the connector line */}
+                <div className={`relative z-10 w-10 h-10 rounded-xl dark:bg-slate-900 bg-white ${s.bg} ring-1 ${s.ring} flex items-center justify-center shrink-0`}>
                   <span className={s.color}>{s.icon}</span>
                 </div>
                 <div>
@@ -848,7 +857,7 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="mt-10"
+            className="mt-12"
           >
             {/* History header */}
             <div className="mb-4">
