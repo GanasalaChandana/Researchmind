@@ -793,10 +793,10 @@ export default function HomePage() {
           className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2"
         >
           {[
-            { icon: <Brain    className="w-5 h-5" />, label: "4 AI Agents",     sub: "4-agent pipeline",              color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
-            { icon: <Network  className="w-5 h-5" />, label: "Knowledge Graph", sub: "Entities & relations",           color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
-            { icon: <FileText className="w-5 h-5" />, label: "Instant Reports", sub: "Cited & structured",             color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
-            { icon: <Link2    className="w-5 h-5" />, label: "Research Chains", sub: "Auto-queue follow-ups",          color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
+            { icon: <Brain    className="w-5 h-5" />, label: t.dot1, sub: t.cap1Sub, color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
+            { icon: <Network  className="w-5 h-5" />, label: t.dot2, sub: t.cap2Sub, color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
+            { icon: <FileText className="w-5 h-5" />, label: t.dot3, sub: t.cap3Sub, color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
+            { icon: <Link2    className="w-5 h-5" />, label: t.dot4, sub: t.cap4Sub, color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
           ].map(f => (
             <motion.div
               key={f.label}
@@ -925,7 +925,7 @@ export default function HomePage() {
                   {sortOrder === "newest"
                     ? <SortDesc className="w-3.5 h-3.5" />
                     : <SortAsc className="w-3.5 h-3.5" />}
-                  <span className="hidden sm:inline">{sortOrder === "newest" ? "Newest" : "Oldest"}</span>
+                  <span className="hidden sm:inline">{sortOrder === "newest" ? t.newest : t.oldest}</span>
                 </button>
                 {/* Advanced filters toggle */}
                 <button
@@ -937,7 +937,7 @@ export default function HomePage() {
                   }`}
                 >
                   <Filter className="w-3 h-3" />
-                  Filters
+                  {t.filters}
                   {activeFilterCount > 0 && (
                     <span className="ml-1 bg-white/30 text-white text-[10px] px-1.5 rounded-full font-bold">
                       {activeFilterCount}
@@ -1028,7 +1028,7 @@ export default function HomePage() {
                     onClick={() => setShowNewCollection(true)}
                     className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-full glass dark:text-slate-400 text-slate-600 hover:text-brand-400 transition-colors"
                   >
-                    <Plus className="w-3 h-3" /> New folder
+                    <Plus className="w-3 h-3" /> {t.newFolder}
                   </button>
                 )}
               </div>
@@ -1082,7 +1082,7 @@ export default function HomePage() {
               <input
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Search past research..."
+                placeholder={t.searchPast}
                 className="w-full dark:bg-white/5 bg-slate-100 dark:border-white/10 border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs dark:text-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500/50 transition-colors"
               />
               {historySearch && (
@@ -1281,7 +1281,7 @@ export default function HomePage() {
                                                          "bg-brand-500/15 text-brand-400"
                             }`}>
                               <StatusIcon status={s.status} />
-                              <span className="capitalize">{s.status}</span>
+                              <span>{s.status === "completed" ? t.statusCompleted : s.status === "failed" ? t.statusFailed : t.statusRunning}</span>
                             </span>
                             <span className="text-xs text-slate-500">{timeAgo(s.created_at)}</span>
 
