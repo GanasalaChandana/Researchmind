@@ -536,19 +536,22 @@ export default function HomePage() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.0 }}
-            className="inline-flex items-center gap-2 mb-5 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300"
+            className="inline-flex items-center gap-2 mb-4 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
             Powered by 4 AI agents · Real-time synthesis
           </motion.div>
 
+          {/* Logo — centered as a block */}
           <motion.div
             initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: "spring", stiffness: 180, damping: 14 }}
-            className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-brand-500/30 via-brand-500/20 to-violet-500/20 border border-brand-500/40 mb-5 shadow-2xl shadow-brand-500/20"
+            className="flex items-center justify-center mb-5"
           >
-            <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-brand-400" />
+            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-brand-500/30 via-brand-500/20 to-violet-500/20 border border-brand-500/40 shadow-2xl shadow-brand-500/20">
+              <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-brand-400" />
+            </div>
           </motion.div>
 
           <motion.h1
@@ -562,36 +565,35 @@ export default function HomePage() {
             </span>
           </motion.h1>
 
-          <motion.p
+          {/* Tagline with rotating word — fixed spacing */}
+          <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18 }}
-            className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed"
+            className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed h-7 flex items-center justify-center gap-1.5"
           >
-            Multi-agent AI that{" "}
-            <span className="inline-block min-w-[80px] text-left">
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={ROTATING_WORDS[wordIdx].word}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.25 }}
-                  className={`font-semibold ${ROTATING_WORDS[wordIdx].color}`}
-                >
-                  {ROTATING_WORDS[wordIdx].word}
-                </motion.span>
-              </AnimatePresence>
-            </span>
-            {" "}— instantly.
-          </motion.p>
+            <span>Multi-agent AI that</span>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={ROTATING_WORDS[wordIdx].word}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22 }}
+                className={`font-semibold ${ROTATING_WORDS[wordIdx].color}`}
+              >
+                {ROTATING_WORDS[wordIdx].word}
+              </motion.span>
+            </AnimatePresence>
+            <span>— instantly.</span>
+          </motion.div>
 
           {/* Live capability dots */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.28 }}
-            className="flex items-center justify-center gap-5 mt-4 text-xs text-slate-500"
+            className="flex items-center justify-center gap-4 sm:gap-5 mt-4 text-xs text-slate-500 flex-wrap"
           >
             {[
               { dot: "bg-brand-400",   label: "4 AI agents" },
@@ -613,7 +615,7 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.22 }}
-          className="glass rounded-2xl p-4 sm:p-6 space-y-4 border dark:border-white/8 border-slate-200/80 shadow-xl dark:shadow-brand-500/5"
+          className="relative glass rounded-2xl p-4 sm:p-6 space-y-4 border dark:border-brand-500/20 border-slate-200/80 shadow-xl shadow-brand-500/10 dark:shadow-brand-500/10 ring-1 ring-brand-500/5"
         >
           {/* Custom Prompts */}
           <PromptCustomizer onSelectPrompt={setCustomPrompts} />
@@ -751,18 +753,94 @@ export default function HomePage() {
           className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2"
         >
           {[
-            { icon: <Brain    className="w-4 h-4" />, label: "4 AI Agents",       sub: "Orchestrate → Search → Read → Synthesize", color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
-            { icon: <Network  className="w-4 h-4" />, label: "Knowledge Graph",   sub: "Entities & relationships across sessions",  color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
-            { icon: <FileText className="w-4 h-4" />, label: "Instant Reports",   sub: "Structured reports with citations",         color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
-            { icon: <Link2    className="w-4 h-4" />, label: "Research Chains",   sub: "Auto-queue follow-up topics in series",     color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
+            { icon: <Brain    className="w-5 h-5" />, label: "4 AI Agents",     sub: "Orchestrate · Search · Read · Synthesize", color: "text-brand-400",   bg: "bg-brand-500/8   border-brand-500/15"  },
+            { icon: <Network  className="w-5 h-5" />, label: "Knowledge Graph", sub: "Entities & relationships across sessions",  color: "text-violet-400", bg: "bg-violet-500/8  border-violet-500/15" },
+            { icon: <FileText className="w-5 h-5" />, label: "Instant Reports", sub: "Structured reports with citations",         color: "text-emerald-400",bg: "bg-emerald-500/8 border-emerald-500/15"},
+            { icon: <Link2    className="w-5 h-5" />, label: "Research Chains", sub: "Auto-queue follow-up topics in series",     color: "text-amber-400",  bg: "bg-amber-500/8   border-amber-500/15"  },
           ].map(f => (
-            <div key={f.label} className={`flex flex-col gap-1.5 p-3 rounded-xl border ${f.bg} transition-all hover:scale-[1.02]`}>
+            <motion.div
+              key={f.label}
+              whileHover={{ scale: 1.03, y: -2 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className={`flex flex-col gap-2 p-3.5 rounded-xl border ${f.bg} cursor-default`}
+            >
               <span className={f.color}>{f.icon}</span>
               <p className="text-xs font-semibold dark:text-white text-slate-800">{f.label}</p>
-              <p className="text-[10px] dark:text-slate-500 text-slate-500 leading-snug hidden sm:block">{f.sub}</p>
-            </div>
+              <p className="text-[10px] dark:text-slate-500 text-slate-500 leading-snug">{f.sub}</p>
+            </motion.div>
           ))}
         </motion.div>
+
+        {/* ── How it works ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.42 }}
+          className="mt-6 glass rounded-2xl p-4 sm:p-5 border dark:border-white/6 border-slate-200/60"
+        >
+          <p className="text-xs font-semibold dark:text-slate-400 text-slate-600 uppercase tracking-wider mb-4 text-center">How it works</p>
+          <div className="grid grid-cols-4 gap-2 relative">
+            {/* Connector line */}
+            <div className="absolute top-5 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-brand-500/30 via-violet-500/30 to-amber-500/30 hidden sm:block" />
+            {[
+              { step: "1", icon: <Brain    className="w-5 h-5" />, label: "Orchestrate", sub: "Breaks your topic into smart sub-questions",  color: "text-brand-400",   ring: "ring-brand-500/30",   bg: "bg-brand-500/10"   },
+              { step: "2", icon: <Search   className="w-5 h-5" />, label: "Search",      sub: "Finds the most relevant sources across the web", color: "text-violet-400", ring: "ring-violet-500/30", bg: "bg-violet-500/10" },
+              { step: "3", icon: <FileText className="w-5 h-5" />, label: "Read",        sub: "Reads and extracts key insights from each source", color: "text-emerald-400",ring: "ring-emerald-500/30",bg: "bg-emerald-500/10"},
+              { step: "4", icon: <Sparkles className="w-5 h-5" />, label: "Synthesize",  sub: "Writes a structured report with citations",       color: "text-amber-400",  ring: "ring-amber-500/30",  bg: "bg-amber-500/10"  },
+            ].map(s => (
+              <div key={s.step} className="flex flex-col items-center text-center gap-2 relative">
+                <div className={`w-10 h-10 rounded-xl ${s.bg} ring-1 ${s.ring} flex items-center justify-center shrink-0 z-10`}>
+                  <span className={s.color}>{s.icon}</span>
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold ${s.color}`}>{s.label}</p>
+                  <p className="text-[10px] dark:text-slate-500 text-slate-500 leading-snug mt-0.5 hidden sm:block">{s.sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* ── Guest CTA — only for non-authenticated users ── */}
+        {!isAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mt-8 relative overflow-hidden rounded-2xl border dark:border-brand-500/20 border-brand-200/60 p-6 sm:p-8 text-center"
+            style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.06) 50%, rgba(16,185,129,0.05) 100%)" }}
+          >
+            {/* Background glow */}
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-violet-500/5 pointer-events-none" />
+            <div className="relative z-10">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-500/15 border border-brand-500/25 mb-4">
+                <UserCircle2 className="w-6 h-6 text-brand-400" />
+              </div>
+              <h3 className="text-base font-bold dark:text-white text-slate-800 mb-2">
+                Save your research history
+              </h3>
+              <p className="text-sm dark:text-slate-400 text-slate-600 max-w-xs mx-auto mb-5 leading-relaxed">
+                Sign in to keep your reports, organize with tags and folders, set up research chains, and access the full API.
+              </p>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Sign in free
+                </button>
+                <button
+                  onClick={() => setShowOnboarding(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 glass border dark:border-white/10 border-slate-200 text-sm dark:text-slate-300 text-slate-700 rounded-xl hover:dark:bg-white/5 hover:bg-slate-50 transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-brand-400" />
+                  See what&apos;s possible
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* History — always shown when authenticated */}
         {isAuthenticated && (
