@@ -114,7 +114,7 @@ export default function HomePage() {
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [showLangPicker, setShowLangPicker] = useState(false);
 
   // Rotating tagline word
@@ -444,7 +444,7 @@ export default function HomePage() {
               title="Sign out"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign out</span>
+              <span className="hidden sm:inline">{t.signOut}</span>
             </button>
           </div>
         ) : (
@@ -454,7 +454,7 @@ export default function HomePage() {
                        bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors"
           >
             <LogIn className="w-3.5 h-3.5" />
-            Sign in
+            {t.signIn}
           </button>
         )}
         {isAuthenticated && (
@@ -499,7 +499,7 @@ export default function HomePage() {
           title="What can ResearchMind do?"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Tour</span>
+          <span className="hidden sm:inline">{t.tour}</span>
         </button>
         {/* Language picker */}
         <div className="relative">
@@ -612,7 +612,7 @@ export default function HomePage() {
             transition={{ delay: 0.18 }}
             className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed h-7 flex items-center justify-center gap-1.5"
           >
-            <span>Multi-agent AI that</span>
+            <span>{t.heroTagline1}</span>
             <AnimatePresence mode="wait">
               <motion.span
                 key={ROTATING_WORDS[wordIdx].word}
@@ -622,10 +622,10 @@ export default function HomePage() {
                 transition={{ duration: 0.22 }}
                 className={`font-semibold ${ROTATING_WORDS[wordIdx].color}`}
               >
-                {ROTATING_WORDS[wordIdx].word}
+                {t.heroTaglineRotating[wordIdx % t.heroTaglineRotating.length]}
               </motion.span>
             </AnimatePresence>
-            <span>— instantly.</span>
+            <span>—</span>
           </motion.div>
 
           {/* Live capability dots */}
@@ -721,7 +721,7 @@ export default function HomePage() {
           >
             {loading
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Launching agents…</>
-              : <><Zap className="w-4 h-4" /> Start Research <ChevronRight className="w-4 h-4 ml-1" /></>
+              : <><Zap className="w-4 h-4" /> {t.startResearch} <ChevronRight className="w-4 h-4 ml-1" /></>
             }
           </button>
 
@@ -818,7 +818,7 @@ export default function HomePage() {
           transition={{ delay: 0.42 }}
           className="mt-6 glass rounded-2xl p-5 sm:p-6 border dark:border-white/6 border-slate-200/60"
         >
-          <p className="text-xs font-semibold dark:text-slate-400 text-slate-500 uppercase tracking-wider mb-5 text-center">How it works</p>
+          <p className="text-xs font-semibold dark:text-slate-400 text-slate-500 uppercase tracking-wider mb-5 text-center">{t.howItWorks}</p>
           <div className="grid grid-cols-4 gap-3 relative">
             {/* Connector line — sits behind icons using absolute positioning */}
             <div
@@ -831,10 +831,10 @@ export default function HomePage() {
               }}
             />
             {[
-              { icon: <Brain    className="w-4 h-4" />, label: "Orchestrate", sub: "Breaks topic into sub-questions",    color: "text-brand-400",   ring: "ring-brand-500/40",   bg: "bg-brand-500/15"   },
-              { icon: <Search   className="w-4 h-4" />, label: "Search",      sub: "Finds relevant sources",             color: "text-violet-400", ring: "ring-violet-500/40", bg: "bg-violet-500/15" },
-              { icon: <FileText className="w-4 h-4" />, label: "Read",        sub: "Extracts key insights",              color: "text-emerald-400",ring: "ring-emerald-500/40",bg: "bg-emerald-500/15"},
-              { icon: <Sparkles className="w-4 h-4" />, label: "Synthesize",  sub: "Writes cited report",                color: "text-amber-400",  ring: "ring-amber-500/40",  bg: "bg-amber-500/15"  },
+              { icon: <Brain    className="w-4 h-4" />, label: t.step1Title, sub: t.step1Desc, color: "text-brand-400",   ring: "ring-brand-500/40",   bg: "bg-brand-500/15"   },
+              { icon: <Search   className="w-4 h-4" />, label: t.step2Title, sub: t.step2Desc, color: "text-violet-400", ring: "ring-violet-500/40", bg: "bg-violet-500/15" },
+              { icon: <FileText className="w-4 h-4" />, label: t.step3Title, sub: t.step3Desc, color: "text-emerald-400",ring: "ring-emerald-500/40",bg: "bg-emerald-500/15"},
+              { icon: <Sparkles className="w-4 h-4" />, label: t.step4Title, sub: t.step4Desc, color: "text-amber-400",  ring: "ring-amber-500/40",  bg: "bg-amber-500/15"  },
             ].map(s => (
               <div key={s.label} className="flex flex-col items-center text-center gap-2">
                 {/* Icon bubble — z-10 so it sits on top of the connector line */}
@@ -877,7 +877,7 @@ export default function HomePage() {
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <LogIn className="w-4 h-4" />
-                  Sign in free
+                  {t.getStarted}
                 </button>
                 <button
                   onClick={() => setShowOnboarding(true)}
@@ -906,7 +906,7 @@ export default function HomePage() {
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                 <div className="flex items-center gap-1.5 text-xs dark:text-slate-500 text-slate-500">
                   <Clock className="w-3.5 h-3.5" />
-                  <h2 className="font-medium">Recent Research</h2>
+                  <h2 className="font-medium">{t.recentResearch}</h2>
                   <span className="dark:bg-white/8 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">
                     {filteredSessions.length}/{totalSessions}
                   </span>
