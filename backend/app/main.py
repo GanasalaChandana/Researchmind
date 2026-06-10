@@ -38,6 +38,9 @@ from .tools.webhooks import (
 from .database import (
     create_webhook_db, list_webhooks_db, delete_webhook_db,
     toggle_webhook_active, list_webhook_deliveries,
+    create_chain_db, list_chains_db, get_chain_db, delete_chain_db,
+    toggle_chain_auto_run, complete_chain_step_and_get_next,
+    start_chain_step, fail_chain_step,
 )
 from .auth.user_db import init_user_tables
 from .routes.auth import router as auth_router
@@ -363,6 +366,62 @@ async def _run_pipeline_bg(
     except Exception as exc:
         print(f"❌ Scheduled pipeline error ({session_id[:8]}): {exc}")
         await _update(session_id, "failed")
+
+
+async def _advance_chain_if_needed(session_id: str, user_id: str | None) -> None:
+    """After a session completes, advance its chain to the next pending step."""
+    try:
+        next_step = await complete_chain_step_and_get_next(session_id)
+        if not next_step:
+            return
+        next_uid = next_step.get("user_id") or user_id
+        new_sid = str(uuid.uuid4())
+        await _create(new_sid, next_step["topic"], user_id=next_uid)
+        await start_chain_step(next_step["id"], new_sid)
+        asyncio.create_task(_run_chain_step_bg(new_sid, next_step["topic"], next_uid))
+        print(f"⛓️ Chain step {next_step['step_order']}: {next_step['topic'][:40]}")
+    except Exception as exc:
+        print(f"⛓️ Chain advance error: {exc}")
+
+
+async def _run_chain_step_bg(session_id: str, topic: str, user_id: str) -> None:
+    """Run pipeline for a chain step; auto-advance or fail-mark after completion."""
+    await _run_pipeline_bg(session_id, topic, 3, user_id)
+    sess = await _get(session_id)
+    if sess and sess.get("status") == "completed":
+        await _advance_chain_if_needed(session_id, user_id)
+    elif sess and sess.get("status") == "failed":
+        await fail_chain_step(session_id)
+
+
+async def _suggest_chain_topics(topic: str, summary: str) -> list[str]:
+    """Use LLM to suggest 3 follow-up research topics for a chain."""
+    import json as _json
+    prompt = (
+        f'A user finished research on: "{topic}"\n\n'
+        f"Summary: {summary[:800]}\n\n"
+        "Suggest exactly 3 follow-up research topics that naturally extend this into a deeper series. "
+        "Each topic should build on the previous but explore a new angle.\n"
+        'Return ONLY a JSON array of 3 strings: ["topic 1", "topic 2", "topic 3"]'
+    )
+    loop = asyncio.get_event_loop()
+    def _call():
+        client = _GroqClient(api_key=GROQ_API_KEY)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        return resp.choices[0].message.content.strip()
+    try:
+        raw = await loop.run_in_executor(None, _call)
+        start = raw.find("[")
+        end   = raw.rfind("]") + 1
+        return _json.loads(raw[start:end]) if start != -1 else []
+    except Exception:
+        return []
+
 
 
 async def _send_schedule_ready_email(
@@ -956,17 +1015,23 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                         user_id=_user_id,
                     ))
 
+                    # ⛓️ Chain: advance to next step if this session is part of a chain
+                    asyncio.create_task(_advance_chain_if_needed(session_id, _user_id))
+
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
         except Exception as e:
             await _update(session_id, "failed")
+            _fail_uid = _mem.get(session_id, {}).get("user_id")
             # 🔔 Fire webhook: research failed
             asyncio.create_task(fire_webhook_event(
                 session_id, "failed",
                 {"topic": topic, "session_id": session_id, "error": str(e)},
-                user_id=_mem.get(session_id, {}).get("user_id"),
+                user_id=_fail_uid,
             ))
+            # ⛓️ Chain: mark step as failed
+            asyncio.create_task(fail_chain_step(session_id))
             error_event = AgentEvent(type="error", agent="system", message=friendly_error(e))
             yield {"data": error_event.model_dump_json()}
 
@@ -1361,6 +1426,113 @@ async def run_schedule_now(
         )
     )
     return {"session_id": session_id, "topic": sched["topic"], "status": "triggered"}
+
+
+# ─── Research Chains ─────────────────────────────────────────────────────────
+
+class _ChainCreate(_PydanticBase):
+    name: str
+    topics: list[str]
+    root_session_id: str | None = None
+    auto_run: bool = True
+
+
+class _ChainToggle(_PydanticBase):
+    auto_run: bool
+
+
+@app.post("/chains/suggest")
+async def suggest_chain_topics(
+    session_id: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate 3 follow-up topic suggestions for a completed research session."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+    report = session.get("report") or {}
+    if isinstance(report, str):
+        import json as _j; report = _j.loads(report)
+    summary = report.get("summary", "")
+    topics = await _suggest_chain_topics(session.get("topic", ""), summary)
+    return {"topics": topics, "session_id": session_id}
+
+
+@app.get("/chains")
+async def list_chains(current_user: dict = Depends(get_current_user)):
+    """List all research chains for the authenticated user."""
+    chains = await list_chains_db(current_user["id"])
+    return {"chains": chains, "count": len(chains)}
+
+
+@app.post("/chains", status_code=201)
+async def create_chain(
+    req: _ChainCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a research chain from a list of topics.
+
+    If `root_session_id` is provided the first step is marked completed immediately
+    (the root session already has its results). Set `auto_run=true` to have subsequent
+    steps start automatically as each one finishes.
+    """
+    if len(req.topics) < 1 or len(req.topics) > 10:
+        raise HTTPException(status_code=400, detail="Chain must have 1-10 topics")
+
+    chain = await create_chain_db(
+        user_id=current_user["id"],
+        name=req.name,
+        topics=req.topics,
+        root_session_id=req.root_session_id,
+        auto_run=req.auto_run,
+    )
+
+    # If root_session_id given, link first step to it and mark completed; kick off step 2
+    if req.root_session_id and chain["steps"]:
+        first = chain["steps"][0]
+        await start_chain_step(first["id"], req.root_session_id)
+        if req.auto_run and len(chain["steps"]) > 1:
+            asyncio.create_task(_advance_chain_if_needed(req.root_session_id, current_user["id"]))
+
+    # Reload with updated step states
+    chain = await get_chain_db(chain["id"])
+    return {"status": "created", "chain": chain}
+
+
+@app.get("/chains/{chain_id}")
+async def get_chain(chain_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a chain with all its steps."""
+    chain = await get_chain_db(chain_id)
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+    if chain["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your chain")
+    return chain
+
+
+@app.patch("/chains/{chain_id}")
+async def update_chain(
+    chain_id: str,
+    req: _ChainToggle,
+    current_user: dict = Depends(get_current_user),
+):
+    """Toggle auto-run on a chain."""
+    chain = await toggle_chain_auto_run(chain_id, current_user["id"], req.auto_run)
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+    return {"status": "updated", "chain": chain}
+
+
+@app.delete("/chains/{chain_id}")
+async def delete_chain(chain_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a chain (does not delete the underlying research sessions)."""
+    chain = await get_chain_db(chain_id)
+    if not chain or chain["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Chain not found")
+    await delete_chain_db(chain_id, current_user["id"])
+    return {"status": "deleted", "chain_id": chain_id}
 
 
 # ─── User-level webhook management ──────────────────────────────────────────

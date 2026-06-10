@@ -244,6 +244,213 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_wh_deliveries_wid ON webhook_deliveries(webhook_id)"
         )
 
+        # ── Research chains (sequential multi-topic research series) ──────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS research_chains (
+                id              TEXT PRIMARY KEY,
+                user_id         TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                root_session_id TEXT,
+                auto_run        BOOLEAN NOT NULL DEFAULT TRUE,
+                status          TEXT NOT NULL DEFAULT 'active',
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chains_user ON research_chains(user_id)"
+        )
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS chain_steps (
+                id           TEXT PRIMARY KEY,
+                chain_id     TEXT NOT NULL REFERENCES research_chains(id) ON DELETE CASCADE,
+                session_id   TEXT,
+                topic        TEXT NOT NULL,
+                step_order   INTEGER NOT NULL,
+                status       TEXT NOT NULL DEFAULT 'pending',
+                started_at   TIMESTAMPTZ,
+                completed_at TIMESTAMPTZ
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chain_steps_chain ON chain_steps(chain_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chain_steps_session ON chain_steps(session_id)"
+        )
+
+
+async def create_chain_db(
+    user_id: str,
+    name: str,
+    topics: list[str],
+    root_session_id: Optional[str] = None,
+    auto_run: bool = True,
+) -> dict:
+    pool = await get_pool()
+    chain_id = f"ch_{secrets.token_hex(8)}"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO research_chains (id, user_id, name, root_session_id, auto_run)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            chain_id, user_id, name, root_session_id, auto_run,
+        )
+        steps = []
+        for i, topic in enumerate(topics):
+            step_id = f"cs_{secrets.token_hex(8)}"
+            await conn.execute(
+                "INSERT INTO chain_steps (id, chain_id, topic, step_order) VALUES ($1,$2,$3,$4)",
+                step_id, chain_id, topic, i,
+            )
+            steps.append({"id": step_id, "topic": topic, "step_order": i, "status": "pending", "session_id": None})
+    return {"id": chain_id, "user_id": user_id, "name": name, "root_session_id": root_session_id,
+            "auto_run": auto_run, "status": "active", "steps": steps}
+
+
+async def list_chains_db(user_id: str) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM research_chains WHERE user_id=$1 ORDER BY created_at DESC", user_id
+        )
+        result = []
+        for row in rows:
+            chain = dict(row)
+            chain["created_at"] = chain["created_at"].isoformat() if chain["created_at"] else None
+            steps = await conn.fetch(
+                "SELECT * FROM chain_steps WHERE chain_id=$1 ORDER BY step_order", chain["id"]
+            )
+            chain["steps"] = [_format_chain_step(dict(s)) for s in steps]
+            result.append(chain)
+        return result
+
+
+def _format_chain_step(s: dict) -> dict:
+    s["started_at"]   = s["started_at"].isoformat()   if s.get("started_at")   else None
+    s["completed_at"] = s["completed_at"].isoformat() if s.get("completed_at") else None
+    return s
+
+
+async def get_chain_db(chain_id: str) -> Optional[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM research_chains WHERE id=$1", chain_id)
+        if not row:
+            return None
+        chain = dict(row)
+        chain["created_at"] = chain["created_at"].isoformat() if chain["created_at"] else None
+        steps = await conn.fetch(
+            "SELECT * FROM chain_steps WHERE chain_id=$1 ORDER BY step_order", chain_id
+        )
+        chain["steps"] = [_format_chain_step(dict(s)) for s in steps]
+        return chain
+
+
+async def delete_chain_db(chain_id: str, user_id: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM research_chains WHERE id=$1 AND user_id=$2", chain_id, user_id
+        )
+        return result == "DELETE 1"
+
+
+async def get_pending_chain_step_for_session(session_id: str) -> Optional[dict]:
+    """Find the chain step that owns this session_id."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM chain_steps WHERE session_id=$1", session_id
+        )
+        return _format_chain_step(dict(row)) if row else None
+
+
+async def complete_chain_step_and_get_next(
+    session_id: str,
+) -> Optional[dict]:
+    """Mark the step owning session_id as completed; return next pending step (if any)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        step = await conn.fetchrow(
+            "SELECT * FROM chain_steps WHERE session_id=$1", session_id
+        )
+        if not step:
+            return None
+        step = dict(step)
+        await conn.execute(
+            "UPDATE chain_steps SET status='completed', completed_at=NOW() WHERE id=$1",
+            step["id"],
+        )
+        # Check if all steps done → mark chain completed
+        pending = await conn.fetchval(
+            "SELECT COUNT(*) FROM chain_steps WHERE chain_id=$1 AND status NOT IN ('completed','failed')",
+            step["chain_id"],
+        )
+        if pending == 0:
+            await conn.execute(
+                "UPDATE research_chains SET status='completed' WHERE id=$1", step["chain_id"]
+            )
+            return None
+        # Get next pending step
+        chain = await conn.fetchrow(
+            "SELECT * FROM research_chains WHERE id=$1", step["chain_id"]
+        )
+        if not chain or not chain["auto_run"] or chain["status"] == "paused":
+            return None
+        next_step = await conn.fetchrow(
+            """
+            SELECT cs.*, rc.user_id FROM chain_steps cs
+            JOIN research_chains rc ON rc.id = cs.chain_id
+            WHERE cs.chain_id=$1 AND cs.status='pending'
+            ORDER BY cs.step_order LIMIT 1
+            """,
+            step["chain_id"],
+        )
+        return dict(next_step) if next_step else None
+
+
+async def start_chain_step(step_id: str, session_id: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE chain_steps SET status='running', session_id=$1, started_at=NOW() WHERE id=$2",
+            session_id, step_id,
+        )
+
+
+async def fail_chain_step(session_id: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE chain_steps SET status='failed', completed_at=NOW() WHERE session_id=$1",
+            session_id,
+        )
+        step = await conn.fetchrow("SELECT chain_id FROM chain_steps WHERE session_id=$1", session_id)
+        if step:
+            await conn.execute(
+                "UPDATE research_chains SET status='paused' WHERE id=$1", step["chain_id"]
+            )
+
+
+async def toggle_chain_auto_run(chain_id: str, user_id: str, auto_run: bool) -> Optional[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE research_chains SET auto_run=$1 WHERE id=$2 AND user_id=$3 RETURNING *",
+            auto_run, chain_id, user_id,
+        )
+        if not row:
+            return None
+        chain = dict(row)
+        chain["created_at"] = chain["created_at"].isoformat() if chain["created_at"] else None
+        steps = await conn.fetch(
+            "SELECT * FROM chain_steps WHERE chain_id=$1 ORDER BY step_order", chain_id
+        )
+        chain["steps"] = [_format_chain_step(dict(s)) for s in steps]
+        return chain
+
 
 async def create_webhook_db(
     user_id: str,

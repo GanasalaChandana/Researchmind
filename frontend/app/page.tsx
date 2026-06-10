@@ -13,7 +13,7 @@ import {
   Search, Sparkles, ChevronRight, Clock,
   CheckCircle2, XCircle, Loader2, Filter,
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
-  SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3, Code2, CalendarClock, Webhook,
+  SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3, Code2, CalendarClock, Webhook, Link2,
   FolderOpen, Plus, Check, FolderPlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -452,6 +452,15 @@ export default function HomePage() {
             >
               <Webhook className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Webhooks</span>
+            </button>
+            <button
+              onClick={() => router.push("/chains")}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                         text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Research chains"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Chains</span>
             </button>
           </>
         )}

@@ -10,6 +10,7 @@ import ResearchProgress, { Phase } from "@/components/ResearchProgress";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import RelatedResearch from "@/components/RelatedResearch";
 import ReportChat from "@/components/ReportChat";
+import ChainCreator from "@/components/ChainCreator";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -284,6 +285,11 @@ export default function ResearchSessionPage() {
         topic={topic || report?.topic || ""}
         ready={status === "completed"}
       />
+
+      {/* Research Chain — continue this topic into a series */}
+      {status === "completed" && (
+        <ChainCreator sessionId={sessionId} topic={topic || report?.topic || ""} />
+      )}
 
       {/* Share Modal */}
       {showShareModal && shareToken && (
