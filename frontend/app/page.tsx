@@ -579,7 +579,7 @@ export default function HomePage() {
             className="inline-flex items-center gap-2 mb-4 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            Powered by 4 AI agents · Real-time synthesis
+            {t.badgePowered}
           </motion.div>
 
           {/* Logo — centered as a block */}
@@ -636,10 +636,10 @@ export default function HomePage() {
             className="flex items-center justify-center gap-4 sm:gap-5 mt-4 text-xs text-slate-500 flex-wrap"
           >
             {[
-              { dot: "bg-brand-400",   label: "4 AI agents" },
-              { dot: "bg-violet-400",  label: "Knowledge graph" },
-              { dot: "bg-emerald-400", label: "Instant reports" },
-              { dot: "bg-amber-400",   label: "Research chains" },
+              { dot: "bg-brand-400",   label: t.dot1 },
+              { dot: "bg-violet-400",  label: t.dot2 },
+              { dot: "bg-emerald-400", label: t.dot3 },
+              { dot: "bg-amber-400",   label: t.dot4 },
             ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${dot} shadow-sm`} />
@@ -700,7 +700,7 @@ export default function HomePage() {
 
           {/* Depth control */}
           <div className="flex items-center gap-3 sm:gap-4 px-1">
-            <label className="text-sm text-slate-400 shrink-0 w-12">Depth</label>
+            <label className="text-sm text-slate-400 shrink-0 w-12">{t.depth}</label>
             <div className="flex-1 relative">
               <input
                 type="range" min={2} max={5} value={depth}
@@ -710,7 +710,7 @@ export default function HomePage() {
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
               <span className="text-sm font-semibold text-white tabular-nums">{depth}</span>
-              <span className="text-xs text-slate-500">questions</span>
+              <span className="text-xs text-slate-500">{t.questions}</span>
             </div>
           </div>
 
@@ -763,13 +763,13 @@ export default function HomePage() {
             className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand-400 transition-colors"
           >
             <GitCompare className="w-3.5 h-3.5" />
-            Compare research depths
+            {t.compareDepths}
           </button>
         </div>
 
         {/* Examples */}
         <div className="mt-5">
-          <p className="text-xs text-slate-500 mb-3 text-center tracking-wide uppercase font-medium">Try an example</p>
+          <p className="text-xs text-slate-500 mb-3 text-center tracking-wide uppercase font-medium">{t.tryAnExample}</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {EXAMPLE_TOPICS.map((t) => (
               <motion.button
@@ -866,10 +866,10 @@ export default function HomePage() {
                 <UserCircle2 className="w-6 h-6 text-brand-400" />
               </div>
               <h3 className="text-base font-bold dark:text-white text-slate-800 mb-2">
-                Save your research history
+                {t.saveHistory}
               </h3>
               <p className="text-sm dark:text-slate-400 text-slate-600 max-w-xs mx-auto mb-5 leading-relaxed">
-                Sign in to keep your reports, organize with tags and folders, set up research chains, and access the full API.
+                {t.guestCtaDetail}
               </p>
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 <button

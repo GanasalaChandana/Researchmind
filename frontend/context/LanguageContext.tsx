@@ -48,6 +48,17 @@ const EN = {
   cap4Title: "Export & share",
   cap4Desc: "Download as Markdown, HTML, or share a public link",
   researchInLanguage: (lang: string) => `Researching in ${lang}`,
+  badgePowered: "Powered by 4 AI agents · Real-time synthesis",
+  dot1: "4 AI agents",
+  dot2: "Knowledge graph",
+  dot3: "Instant reports",
+  dot4: "Research chains",
+  tryAnExample: "Try an example",
+  depth: "Depth",
+  questions: "questions",
+  compareDepths: "Compare research depths",
+  saveHistory: "Save your research history",
+  guestCtaDetail: "Sign in to keep your reports, organize with tags and folders, set up research chains, and access the full API.",
 };
 
 const ES: Translations = {
@@ -84,6 +95,17 @@ const ES: Translations = {
   cap4Title: "Exportar y compartir",
   cap4Desc: "Descarga como Markdown, HTML o comparte un enlace",
   researchInLanguage: (lang: string) => `Investigando en ${lang}`,
+  badgePowered: "Desarrollado por 4 agentes IA · Síntesis en tiempo real",
+  dot1: "4 agentes IA",
+  dot2: "Grafo de conocimiento",
+  dot3: "Informes al instante",
+  dot4: "Cadenas de investigación",
+  tryAnExample: "Prueba un ejemplo",
+  depth: "Profundidad",
+  questions: "preguntas",
+  compareDepths: "Comparar profundidades",
+  saveHistory: "Guarda tu historial de investigación",
+  guestCtaDetail: "Inicia sesión para guardar tus informes, organizar con etiquetas y carpetas, crear cadenas de investigación y acceder a la API.",
 };
 
 const FR: Translations = {
@@ -120,6 +142,17 @@ const FR: Translations = {
   cap4Title: "Exporter et partager",
   cap4Desc: "Téléchargez en Markdown, HTML ou partagez un lien",
   researchInLanguage: (lang: string) => `Recherche en ${lang}`,
+  badgePowered: "Propulsé par 4 agents IA · Synthèse en temps réel",
+  dot1: "4 agents IA",
+  dot2: "Graphe de connaissances",
+  dot3: "Rapports instantanés",
+  dot4: "Chaînes de recherche",
+  tryAnExample: "Essayer un exemple",
+  depth: "Profondeur",
+  questions: "questions",
+  compareDepths: "Comparer les profondeurs",
+  saveHistory: "Sauvegardez votre historique",
+  guestCtaDetail: "Connectez-vous pour conserver vos rapports, organiser avec des tags et des dossiers, créer des chaînes de recherche et accéder à l'API.",
 };
 
 const DE: Translations = {
@@ -156,6 +189,17 @@ const DE: Translations = {
   cap4Title: "Exportieren & teilen",
   cap4Desc: "Als Markdown, HTML herunterladen oder Link teilen",
   researchInLanguage: (lang: string) => `Forschung auf ${lang}`,
+  badgePowered: "Betrieben von 4 KI-Agenten · Echtzeit-Synthese",
+  dot1: "4 KI-Agenten",
+  dot2: "Wissensgraph",
+  dot3: "Sofortberichte",
+  dot4: "Forschungsketten",
+  tryAnExample: "Beispiel ausprobieren",
+  depth: "Tiefe",
+  questions: "Fragen",
+  compareDepths: "Tiefen vergleichen",
+  saveHistory: "Forschungsverlauf speichern",
+  guestCtaDetail: "Melden Sie sich an, um Berichte zu speichern, mit Tags und Ordnern zu organisieren, Forschungsketten einzurichten und auf die API zuzugreifen.",
 };
 
 const HI: Translations = {
@@ -192,6 +236,17 @@ const HI: Translations = {
   cap4Title: "निर्यात और साझा करें",
   cap4Desc: "Markdown, HTML के रूप में डाउनलोड करें या लिंक साझा करें",
   researchInLanguage: (lang: string) => `${lang} में शोध`,
+  badgePowered: "4 AI एजेंट्स द्वारा संचालित · रीयल-टाइम संश्लेषण",
+  dot1: "4 AI एजेंट्स",
+  dot2: "ज्ञान ग्राफ",
+  dot3: "तत्काल रिपोर्ट",
+  dot4: "शोध श्रृंखलाएं",
+  tryAnExample: "उदाहरण आज़माएं",
+  depth: "गहराई",
+  questions: "प्रश्न",
+  compareDepths: "गहराई की तुलना करें",
+  saveHistory: "अपना शोध इतिहास सहेजें",
+  guestCtaDetail: "अपनी रिपोर्ट सहेजने, टैग और फ़ोल्डर से व्यवस्थित करने, शोध श्रृंखलाएं बनाने और API तक पहुंचने के लिए साइन इन करें।",
 };
 
 const TRANSLATION_MAP: Record<SupportedLanguage, Translations> = {
