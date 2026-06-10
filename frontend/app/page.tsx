@@ -33,6 +33,19 @@ const EXAMPLE_TOPICS = [
   "History and evolution of the internet",
 ];
 
+const ROTATING_WORDS = [
+  { word: "searches", color: "text-brand-400" },
+  { word: "reads",    color: "text-violet-400" },
+  { word: "synthesizes", color: "text-emerald-400" },
+];
+
+const PIPELINE_STEPS = [
+  { label: "Orchestrating", color: "text-brand-400",   dot: "bg-brand-400" },
+  { label: "Searching",     color: "text-violet-400",  dot: "bg-violet-400" },
+  { label: "Reading",       color: "text-emerald-400", dot: "bg-emerald-400" },
+  { label: "Synthesizing",  color: "text-amber-400",   dot: "bg-amber-400" },
+];
+
 interface SessionTag {
   name: string;
   color?: string;
@@ -96,8 +109,22 @@ export default function HomePage() {
   const [newCollectionName, setNewCollectionName] = useState("");
   const [newCollectionColor, setNewCollectionColor] = useState<string>("indigo");
   const itemsPerPage = 10;
+  const [wordIdx, setWordIdx] = useState(0);
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, signOut, isAuthenticated } = useAuth();
+
+  // Rotating tagline word
+  useEffect(() => {
+    const t = setInterval(() => setWordIdx(i => (i + 1) % ROTATING_WORDS.length), 2200);
+    return () => clearInterval(t);
+  }, []);
+
+  // Cycling placeholder in the search input
+  useEffect(() => {
+    const t = setInterval(() => setPlaceholderIdx(i => (i + 1) % EXAMPLE_TOPICS.length), 3500);
+    return () => clearInterval(t);
+  }, []);
 
   // If arriving from a password-reset email link (/?reset_token=...), open the
   // auth modal in reset mode with the code pre-filled, then clean the URL.
@@ -386,8 +413,11 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12 relative overflow-x-hidden">
 
-      {/* ── Animated background orbs ── */}
+      {/* ── Animated background ── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+        {/* Dot grid texture */}
+        <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+        {/* Gradient orbs */}
         <div className="absolute -top-60 -right-60 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl animate-pulse" />
         <div className="absolute -bottom-60 -left-60 w-[600px] h-[600px] bg-violet-500/8 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s", animationDuration: "4s" }} />
         <div className="absolute top-1/3 left-1/4 w-72 h-72 bg-brand-400/6 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "3s", animationDuration: "5s" }} />
@@ -500,6 +530,18 @@ export default function HomePage() {
       >
         {/* ── Hero ── */}
         <div className="text-center mb-8 sm:mb-12">
+
+          {/* Badge pill */}
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.0 }}
+            className="inline-flex items-center gap-2 mb-5 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            Powered by 4 AI agents · Real-time synthesis
+          </motion.div>
+
           <motion.div
             initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -527,9 +569,21 @@ export default function HomePage() {
             className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed"
           >
             Multi-agent AI that{" "}
-            <span className="text-brand-400 font-medium">searches</span>,{" "}
-            <span className="text-violet-400 font-medium">reads</span>,{" "}
-            <span className="text-emerald-400 font-medium">synthesizes</span> — instantly.
+            <span className="inline-block min-w-[80px] text-left">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={ROTATING_WORDS[wordIdx].word}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.25 }}
+                  className={`font-semibold ${ROTATING_WORDS[wordIdx].color}`}
+                >
+                  {ROTATING_WORDS[wordIdx].word}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+            {" "}— instantly.
           </motion.p>
 
           {/* Live capability dots */}
@@ -571,7 +625,7 @@ export default function HomePage() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-              placeholder="What do you want to research?"
+              placeholder={topic ? "What do you want to research?" : `Try: ${EXAMPLE_TOPICS[placeholderIdx]}`}
               className="w-full dark:bg-white/5 bg-slate-50 dark:border-white/10 border-slate-200 rounded-xl pl-12 pr-4 py-3.5 sm:py-4 dark:text-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/60 dark:focus:border-brand-500/60 focus:shadow-lg focus:shadow-brand-500/10 transition-all text-base sm:text-lg"
               autoFocus
               autoComplete="off"
@@ -628,6 +682,36 @@ export default function HomePage() {
               : <><Zap className="w-4 h-4" /> Start Research <ChevronRight className="w-4 h-4 ml-1" /></>
             }
           </button>
+
+          {/* Pipeline step indicator — visible while loading */}
+          <AnimatePresence>
+            {loading && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center justify-center gap-1 pt-3 pb-1">
+                  {PIPELINE_STEPS.map((step, i) => (
+                    <div key={step.label} className="flex items-center gap-1">
+                      <motion.div
+                        className="flex items-center gap-1"
+                        animate={{ opacity: [0.35, 1, 0.35] }}
+                        transition={{ repeat: Infinity, duration: 2.4, delay: i * 0.6 }}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${step.dot} shrink-0`} />
+                        <span className={`text-[10px] font-medium ${step.color}`}>{step.label}</span>
+                      </motion.div>
+                      {i < PIPELINE_STEPS.length - 1 && (
+                        <span className="text-slate-700 text-[10px] mx-0.5">→</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.form>
 
         {/* Compare link */}
@@ -689,16 +773,21 @@ export default function HomePage() {
             className="mt-10"
           >
             {/* History header */}
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-500" />
-                <h2 className="text-sm font-medium dark:text-slate-400 text-slate-700">
-                  Recent Research
-                </h2>
-                <span className="text-xs dark:bg-white/10 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full">
-                  {filteredSessions.length}/{totalSessions}
-                </span>
+            <div className="mb-4">
+              {/* Gradient divider with label */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                <div className="flex items-center gap-1.5 text-xs dark:text-slate-500 text-slate-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  <h2 className="font-medium">Recent Research</h2>
+                  <span className="dark:bg-white/8 bg-slate-200 dark:text-slate-400 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">
+                    {filteredSessions.length}/{totalSessions}
+                  </span>
+                </div>
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
               </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div />
               <div className="flex items-center gap-2">
                 {/* Sort toggle */}
                 <button
@@ -728,6 +817,7 @@ export default function HomePage() {
                     </span>
                   )}
                 </button>
+              </div>
               </div>
             </div>
 
