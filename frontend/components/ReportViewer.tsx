@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { exportToPdf } from "@/lib/exportPdf";
 import { exportToDocx } from "@/lib/exportDocx";
 import toast from "react-hot-toast";
+import { useLanguage } from "@/context/LanguageContext";
 
 type CitationStyle = "apa" | "mla" | "chicago";
 
@@ -30,6 +31,7 @@ function formatCitation(source: any, index: number, style: CitationStyle): strin
 }
 
 export default function ReportViewer({ report, sessionId }: { report: ResearchReport; sessionId?: string }) {
+  const { t } = useLanguage();
   const [exporting, setExporting] = useState<string | null>(null); // which format is loading
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("apa");
   const [showShare, setShowShare] = useState(false);
@@ -151,7 +153,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
             className="flex items-center gap-2 px-3 py-2 rounded-lg dark:text-slate-300 text-slate-600 hover:text-white hover:bg-brand-500/20 transition-colors"
           >
             <Share2 className="w-4 h-4" />
-            <span className="text-sm">Share</span>
+            <span className="text-sm">{t.share}</span>
           </button>
         </div>
 
@@ -183,7 +185,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
             {exporting
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : <Download className="w-4 h-4" />}
-            {exporting ? "Exporting…" : "Export"}
+            {exporting ? t.exporting : t.export}
             {!exporting && <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExportMenu ? "rotate-180" : ""}`} />}
           </button>
 
@@ -197,10 +199,10 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
                 className="absolute left-0 top-full mt-1.5 glass rounded-xl overflow-hidden z-30 w-52 border dark:border-white/10 border-slate-200 shadow-xl"
               >
                 {[
-                  { label: "PDF Document",    sub: "Best for printing / sharing",  icon: "📄", action: handleExportPdf  },
-                  { label: "Word (DOCX)",     sub: "Editable in Microsoft Word",   icon: "📝", action: handleExportDocx },
-                  { label: "Markdown (.md)",  sub: "For docs, GitHub, Notion",     icon: "⌨️", action: handleExportMarkdown },
-                  { label: "HTML Page",       sub: "Self-contained web page",      icon: "🌐", action: handleExportHtml },
+                  { label: t.exportPdfLabel,  sub: t.exportPdfSub,  icon: "📄", action: handleExportPdf  },
+                  { label: t.exportWordLabel, sub: t.exportWordSub, icon: "📝", action: handleExportDocx },
+                  { label: t.exportMdLabel,   sub: t.exportMdSub,   icon: "⌨️", action: handleExportMarkdown },
+                  { label: t.exportHtmlLabel, sub: t.exportHtmlSub, icon: "🌐", action: handleExportHtml },
                 ].map(({ label, sub, icon, action }) => (
                   <button
                     key={label}
@@ -236,19 +238,19 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
             <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-brand-400" />
-                <span className="text-sm font-semibold dark:text-white text-slate-900">Citation Verification</span>
+                <span className="text-sm font-semibold dark:text-white text-slate-900">{t.citationVerification}</span>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1 text-emerald-400"><ShieldCheck className="w-3 h-3" />{verified} verified</span>
-                <span className="flex items-center gap-1 text-amber-400"><ShieldAlert className="w-3 h-3" />{partial} partial</span>
-                <span className="flex items-center gap-1 text-red-400"><ShieldX className="w-3 h-3" />{unverified} unverified</span>
+                <span className="flex items-center gap-1 text-emerald-400"><ShieldCheck className="w-3 h-3" />{verified} {t.citVerified}</span>
+                <span className="flex items-center gap-1 text-amber-400"><ShieldAlert className="w-3 h-3" />{partial} {t.citPartial}</span>
+                <span className="flex items-center gap-1 text-red-400"><ShieldX className="w-3 h-3" />{unverified} {t.citUnverified}</span>
               </div>
             </div>
             <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
               <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
             </div>
             <p className="text-[10px] dark:text-slate-500 text-slate-500 mt-1.5">
-              {pct}% of citations verified against source content · {allChecks.length} total checked
+              {t.citSummary(pct, allChecks.length)}
             </p>
           </div>
         );
@@ -256,7 +258,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
 
       {/* Summary */}
       <div className="glass rounded-xl p-6 border-l-4 border-brand-500">
-        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-2">Executive Summary</h2>
+        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-2">{t.executiveSummary}</h2>
         <p className="dark:text-slate-300 text-slate-700 leading-relaxed">{report.summary}</p>
       </div>
 
@@ -385,7 +387,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
 
       {/* Sources */}
       <div>
-        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-4">Sources ({uniqueSources.length})</h2>
+        <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-4">{t.sources} ({uniqueSources.length})</h2>
         <div className="space-y-3">
           {uniqueSources.map((source, i) => {
             const q = source.quality_score ?? 0;
@@ -393,9 +395,9 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
             const hasScore = (source.quality_score ?? 0) > 0;
 
             const TIER_META: Record<string, { label: string; bar: string; pill: string }> = {
-              high:   { label: "High authority",   bar: "bg-emerald-400", pill: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-              medium: { label: "Medium authority",  bar: "bg-amber-400",   pill: "bg-amber-500/10  text-amber-400  border-amber-500/20"  },
-              low:    { label: "Low authority",     bar: "bg-slate-500",   pill: "bg-slate-500/10  text-slate-400  border-slate-500/20"  },
+              high:   { label: t.highAuthority,   bar: "bg-emerald-400", pill: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+              medium: { label: t.mediumAuthority, bar: "bg-amber-400",   pill: "bg-amber-500/10  text-amber-400  border-amber-500/20"  },
+              low:    { label: t.lowAuthority,    bar: "bg-slate-500",   pill: "bg-slate-500/10  text-slate-400  border-slate-500/20"  },
             };
             const tierMeta = TIER_META[tier] ?? { label: "Unknown", bar: "bg-slate-500", pill: "bg-slate-500/10 text-slate-400 border-slate-500/20" };
 
@@ -426,7 +428,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
                           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${tierMeta.pill}`}>
                             {tierMeta.label}
                           </span>
-                          <span className="text-[10px] font-mono font-bold dark:text-slate-400 text-slate-500" title="Quality score (0–100)">
+                          <span className="text-[10px] font-mono font-bold dark:text-slate-400 text-slate-500" title={t.qualityScore}>
                             {Math.round(q)}
                           </span>
                         </div>
@@ -439,7 +441,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
                     {hasScore && source.recency_score !== undefined && (
                       <div className="flex items-center gap-3 mt-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] dark:text-slate-600 text-slate-400">Recency</span>
+                          <span className="text-[10px] dark:text-slate-600 text-slate-400">{t.recency}</span>
                           <div className="w-16 h-1 rounded-full bg-white/8 overflow-hidden">
                             <div
                               className={`h-full rounded-full ${

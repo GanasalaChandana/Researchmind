@@ -13,6 +13,7 @@ import ReportChat from "@/components/ReportChat";
 import ChainCreator from "@/components/ChainCreator";
 import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
 import toast from "react-hot-toast";
+import { useLanguage } from "@/context/LanguageContext";
 
 type Tab = "agents" | "graph" | "report";
 
@@ -33,6 +34,7 @@ export default function ResearchSessionPage() {
   const depth = Number(searchParams.get("depth") ?? 3);
   const language = searchParams.get("language") ?? "English";
 
+  const { t } = useLanguage();
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [status, setStatus] = useState<"running" | "completed" | "failed">("running");
@@ -143,9 +145,9 @@ export default function ResearchSessionPage() {
   const graph: KnowledgeGraph = report?.knowledge_graph ?? { entities: [], relationships: [] };
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "agents", label: "Agent Activity", icon: <Brain className="w-4 h-4" /> },
-    { id: "graph",  label: "Knowledge Graph", icon: <Network className="w-4 h-4" /> },
-    { id: "report", label: "Report",           icon: <FileText className="w-4 h-4" /> },
+    { id: "agents", label: t.tabAgentActivity, icon: <Brain className="w-4 h-4" /> },
+    { id: "graph",  label: t.tabKnowledgeGraph, icon: <Network className="w-4 h-4" /> },
+    { id: "report", label: t.tabReport,          icon: <FileText className="w-4 h-4" /> },
   ];
 
   // Show loading spinner while checking DB
@@ -199,7 +201,7 @@ export default function ResearchSessionPage() {
               ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Creating...</span></>
               : copied
               ? <><Check className="w-4 h-4 text-emerald-400" /> <span className="hidden sm:inline">Copied!</span></>
-              : <><Share2 className="w-4 h-4" /> <span className="hidden sm:inline">Share</span></>
+              : <><Share2 className="w-4 h-4" /> <span className="hidden sm:inline">{t.share}</span></>
             }
           </button>
         </div>
