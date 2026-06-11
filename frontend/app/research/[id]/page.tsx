@@ -78,6 +78,11 @@ export default function ResearchSessionPage() {
         startStream();
       });
 
+    // Request notification permission non-intrusively
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
     function startStream() {
       if (!topic) return;
       const es = streamResearch(sessionId, topic, depth, undefined, language, docIds.length ? docIds : undefined);
@@ -97,6 +102,24 @@ export default function ResearchSessionPage() {
             setPhase("done");
             setTab("report");
             es.close();
+
+            // Fire browser notification if tab is not focused
+            if (
+              typeof window !== "undefined" &&
+              "Notification" in window &&
+              Notification.permission === "granted" &&
+              document.visibilityState !== "visible"
+            ) {
+              const n = new Notification("Research complete ✓", {
+                body: topic,
+                icon: "/favicon.ico",
+                tag: sessionId,
+              });
+              n.onclick = () => {
+                window.focus();
+                n.close();
+              };
+            }
           }
 
           if (event.type === "error") {
@@ -167,12 +190,25 @@ export default function ResearchSessionPage() {
     <div className="min-h-screen p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <button
-          onClick={() => router.push("/")}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+
+          {/* Notification permission nudge — only shown while running + permission not yet granted */}
+          {status === "running" && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default" && (
+            <button
+              onClick={() => Notification.requestPermission().catch(() => {})}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-400 transition-colors px-2 py-1 rounded-lg hover:bg-amber-400/10"
+              title="Get notified when research finishes"
+            >
+              🔔 <span className="hidden sm:inline">Notify me when done</span>
+            </button>
+          )}
+        </div>
 
         <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
           <div className="min-w-0 flex-1">
