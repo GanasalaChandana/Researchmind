@@ -100,5 +100,44 @@ def test_pdf_export_missing_session_returns_404(client):
 
 def test_unsupported_format_returns_400(client):
     session_id = _make_session_with_report(client)
-    r = client.get(f"/research/{session_id}/export/docx")
+    r = client.get(f"/research/{session_id}/export/xyz")
     assert r.status_code == 400
+
+
+# ── DOCX export ───────────────────────────────────────────────────────────────
+
+def test_docx_export_returns_200(client):
+    session_id = _make_session_with_report(client)
+    r = client.get(f"/research/{session_id}/export/docx")
+    assert r.status_code == 200
+
+
+def test_docx_export_content_type(client):
+    session_id = _make_session_with_report(client)
+    r = client.get(f"/research/{session_id}/export/docx")
+    assert "wordprocessingml" in r.headers["content-type"]
+
+
+def test_docx_export_content_disposition(client):
+    session_id = _make_session_with_report(client)
+    r = client.get(f"/research/{session_id}/export/docx")
+    assert "attachment" in r.headers["content-disposition"]
+    assert ".docx" in r.headers["content-disposition"]
+
+
+def test_docx_export_non_empty(client):
+    session_id = _make_session_with_report(client)
+    r = client.get(f"/research/{session_id}/export/docx")
+    assert len(r.content) > 1000
+
+
+def test_docx_export_starts_with_zip_magic(client):
+    """DOCX files are ZIP archives — magic bytes are PK\x03\x04."""
+    session_id = _make_session_with_report(client)
+    r = client.get(f"/research/{session_id}/export/docx")
+    assert r.content[:2] == b"PK"
+
+
+def test_docx_missing_session_returns_404(client):
+    r = client.get("/research/nonexistent-id/export/docx")
+    assert r.status_code == 404

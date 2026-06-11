@@ -46,6 +46,7 @@ from .tools.rate_limit import check_rate_limit
 from .tools.language_detect import detect_language
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.pdf_export import generate_report_pdf
+from .tools.docx_export import generate_report_docx
 from .tools.metrics import (
     research_sessions_total, groq_calls_total,
     cache_hits_total, cache_misses_total, export_requests_total,
@@ -1403,7 +1404,16 @@ async def export_research(session_id: str, format_type: str):
         sections = report_dict.get("sections", [])
         sources = report_dict.get("sources", [])
 
-        if format_type == "pdf":
+        if format_type == "docx":
+            from fastapi.responses import Response as _DocxResponse
+            export_requests_total.labels(format="docx").inc()
+            docx_bytes = generate_report_docx(report_dict, session_id)
+            return _DocxResponse(
+                content=docx_bytes,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f"attachment; filename=report-{session_id[:8]}.docx"},
+            )
+        elif format_type == "pdf":
             from fastapi.responses import Response as _PDFResponse
             export_requests_total.labels(format="pdf").inc()
             pdf_bytes = generate_report_pdf(report_dict, session_id)
