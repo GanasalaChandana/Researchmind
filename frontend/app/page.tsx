@@ -1593,36 +1593,38 @@ export default function HomePage() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.97 }}
-                      className="relative group flex items-center gap-2"
+                      className="relative group"
                     >
-                      {/* Select checkbox */}
-                      {selectMode && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleSelect(s.id); }}
-                          className="shrink-0 w-5 h-5 flex items-center justify-center text-brand-400"
-                        >
-                          {selectedIds.has(s.id)
-                            ? <CheckSquare className="w-5 h-5 text-brand-400" />
-                            : <Square className="w-5 h-5 text-slate-500" />
-                          }
-                        </button>
-                      )}
-
                       {/* Card */}
                       <div
                         onClick={() => selectMode ? toggleSelect(s.id) : router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
-                        className={`relative flex-1 rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.07] hover:bg-slate-50/80 dark:hover:border-white/15 hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-lg dark:hover:shadow-brand-500/5 hover:translate-y-[-1px] ${
-                          selectMode && selectedIds.has(s.id) ? "ring-2 ring-brand-500/60" : ""
+                        className={`relative rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.07] hover:bg-slate-50/80 dark:hover:border-white/15 hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-lg dark:hover:shadow-brand-500/5 hover:translate-y-[-1px] ${
+                          selectMode && selectedIds.has(s.id) ? "ring-2 ring-brand-500/50 dark:ring-brand-500/60" : ""
                         }`}
                       >
-                        {/* Left status accent bar */}
-                        <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl transition-all duration-200 ${
-                          s.status === "completed" ? "bg-emerald-400 group-hover:shadow-sm group-hover:shadow-emerald-400/50" :
-                          s.status === "failed"    ? "bg-red-400" :
-                                                     "bg-brand-400 animate-pulse"
-                        }`} />
+                        {/* Left status accent bar — hidden in select mode to make room for checkbox */}
+                        {!selectMode && (
+                          <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl transition-all duration-200 ${
+                            s.status === "completed" ? "bg-emerald-400 group-hover:shadow-sm group-hover:shadow-emerald-400/50" :
+                            s.status === "failed"    ? "bg-red-400" :
+                                                       "bg-brand-400 animate-pulse"
+                          }`} />
+                        )}
 
-                        <div className="pl-5 pr-24 py-4">
+                        {/* Checkbox — replaces accent bar in select mode */}
+                        {selectMode && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleSelect(s.id); }}
+                            className="absolute inset-y-0 left-0 w-10 flex items-center justify-center hover:bg-brand-500/10 transition-colors z-10"
+                          >
+                            {selectedIds.has(s.id)
+                              ? <CheckSquare className="w-4 h-4 text-brand-400" />
+                              : <Square className="w-4 h-4 text-slate-500" />
+                            }
+                          </button>
+                        )}
+
+                        <div className={`py-4 pr-24 transition-all duration-200 ${selectMode ? "pl-11" : "pl-5"}`}>
                           {/* Topic */}
                           <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-2 line-clamp-2 group-hover:dark:text-white transition-colors">
                             {s.topic}
