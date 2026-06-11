@@ -449,8 +449,8 @@ export default function CompareResultsPage() {
           <AnalysisPanel
             report1={report1!}
             report2={report2!}
-            label1="Session A"
-            label2="Session B"
+            label1={label1}
+            label2={label2}
           />
         )}
       </AnimatePresence>
