@@ -534,8 +534,20 @@ const LanguageContext = createContext<LanguageContextValue>({
   t: EN,
 });
 
+const STORAGE_KEY = "rm_language";
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<SupportedLanguage>("English");
+  const [language, setLanguageState] = useState<SupportedLanguage>(() => {
+    if (typeof window === "undefined") return "English";
+    const saved = localStorage.getItem(STORAGE_KEY) as SupportedLanguage | null;
+    return saved && LANGUAGES.some(l => l.code === saved) ? saved : "English";
+  });
+
+  function setLanguage(lang: SupportedLanguage) {
+    setLanguageState(lang);
+    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, lang);
+  }
+
   const t = TRANSLATION_MAP[language];
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
