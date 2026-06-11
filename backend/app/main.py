@@ -37,6 +37,7 @@ from .database import (
     save_document, get_documents_text, delete_document, count_user_documents,
     cleanup_old_uploads, cleanup_old_chat_messages, cleanup_expired_cache,
     add_comment, get_comments, delete_comment,
+    save_report_version, get_report_versions, get_report_version,
 )
 from .tools.error_handler import friendly_error
 from .tools.rate_limit import check_rate_limit
@@ -252,6 +253,9 @@ async def _update(session_id: str, status: str, report=None):
         await update_session(session_id, status, report)
     except Exception as exc:
         logger.warning("DB update failed for session %s, using memory fallback: %s", session_id[:8], exc)
+    # Snapshot completed report as a new version
+    if status == "completed" and report:
+        _bg_task(save_report_version(session_id, report if isinstance(report, dict) else json.loads(report)))
 
 
 async def _get(session_id: str):
@@ -486,10 +490,14 @@ async def _run_pipeline_bg(
             logger.info("Scheduled pipeline done: %s — %s", session_id[:8], topic[:40])
         else:
             await _update(session_id, "failed")
+            if notify_email:
+                _bg_task(_send_schedule_failed_email(user_id, topic, session_id))
 
     except Exception as exc:
         logger.error("Scheduled pipeline error (%s): %s", session_id[:8], exc, exc_info=exc)
         await _update(session_id, "failed")
+        if notify_email:
+            _bg_task(_send_schedule_failed_email(user_id, topic, session_id))
 
 
 async def _advance_chain_if_needed(session_id: str, user_id: str | None) -> None:
@@ -593,6 +601,46 @@ async def _send_schedule_ready_email(
         await send_email(user["email"], f"Research ready: {topic[:60]}", html)
     except Exception as exc:
         logger.warning("Schedule email failed for user %s: %s", user_id, exc)
+
+
+async def _send_schedule_failed_email(user_id: str, topic: str, session_id: str) -> None:
+    """Email the session owner when their scheduled research fails."""
+    try:
+        from .auth.user_db import get_user_by_id
+        from .tools.email import send_email, email_configured
+        if not email_configured():
+            return
+        user = await get_user_by_id(user_id)
+        if not user or not user.get("email"):
+            return
+        name = user.get("name") or user["email"].split("@")[0]
+        dashboard_url = f"{FRONTEND_URL}/dashboard"
+        html = f"""\
+<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;
+            margin:0 auto;padding:24px;color:#0f172a">
+  <div style="text-align:center;margin-bottom:20px">
+    <span style="font-size:22px;font-weight:700;color:#6366f1">ResearchMind</span>
+  </div>
+  <h2 style="font-size:18px;margin:0 0 8px;color:#dc2626">Scheduled research failed</h2>
+  <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 20px">
+    Hi {name}, your scheduled research on
+    <strong>&ldquo;{topic}&rdquo;</strong> encountered an error and could not complete.
+  </p>
+  <p style="font-size:14px;color:#475569;margin:0 0 20px">
+    You can retry the research manually from your dashboard.
+  </p>
+  <div style="text-align:center">
+    <a href="{dashboard_url}"
+       style="display:inline-block;background:#6366f1;color:white;padding:12px 28px;
+              border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
+      Go to Dashboard
+    </a>
+  </div>
+  <p style="font-size:12px;color:#94a3b8;margin:16px 0 0">Session ID: {session_id}</p>
+</div>"""
+        await send_email(user["email"], f"Research failed: {topic[:60]}", html)
+    except Exception as exc:
+        logger.warning("Schedule failure email failed for user %s: %s", user_id, exc)
 
 
 # ─── Chat with report ────────────────────────────────────────────────────────
@@ -954,26 +1002,28 @@ async def get_sessions(
     days: int = Query(default=None, ge=1, le=365),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    cursor: str = Query(default=None, max_length=200, description="Opaque cursor for efficient pagination"),
     favorites: bool = False,
     tag: str = Query(default=None, max_length=80),
     collection: str = Query(default=None, max_length=100),
     current_user: dict = Depends(get_optional_user),
 ):
-    """List sessions with pagination — filters to current user's sessions if authenticated"""
+    """List sessions with pagination — supports both offset and cursor pagination."""
+    import base64 as _b64
     user_id = current_user["id"] if current_user else None
     try:
         sessions = await _list(user_id=user_id, favorites_only=favorites)
     except Exception:
         sessions = []
 
-    # Apply additional filters
+    # Apply filters
     filtered = sessions
     if status:
         filtered = [s for s in filtered if s.get("status") == status]
     if search:
         filtered = [s for s in filtered if search.lower() in s.get("topic", "").lower()]
     if days:
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         filtered = [s for s in filtered if s.get("created_at", "") > cutoff]
     if tag:
@@ -981,11 +1031,24 @@ async def get_sessions(
     if collection:
         filtered = [s for s in filtered if s.get("collection_id") == collection]
 
-    total = len(filtered)
-    # Paginate: offset-based pagination
-    paginated = filtered[offset : offset + limit]
+    # Cursor pagination: cursor encodes the created_at of the last seen item
+    if cursor:
+        try:
+            cursor_ts = _b64.b64decode(cursor.encode()).decode()
+            filtered = [s for s in filtered if s.get("created_at", "") < cursor_ts]
+        except Exception:
+            pass  # Malformed cursor — ignore, fall back to full list
 
-    # Strip large report field from list view for performance
+    total = len(filtered)
+    paginated = filtered[offset: offset + limit]
+
+    # Build next cursor from last item's created_at
+    next_cursor = None
+    if len(paginated) == limit and paginated:
+        last_ts = paginated[-1].get("created_at", "")
+        if last_ts:
+            next_cursor = _b64.b64encode(last_ts.encode()).decode()
+
     return {
         "items": [
             {k: v for k, v in s.items() if k != "report"}
@@ -995,6 +1058,7 @@ async def get_sessions(
         "offset": offset,
         "limit": limit,
         "has_more": offset + limit < total,
+        "next_cursor": next_cursor,
     }
 
 
@@ -1007,6 +1071,28 @@ class _BulkDeleteRequest(_PydanticBase):
 class _BulkTagRequest(_PydanticBase):
     session_ids: list[str] = _Field(..., min_length=1, max_length=50)
     tags: list[str] = _Field(..., min_length=1, max_length=20)
+
+
+@app.get("/research/{session_id}/versions")
+async def list_report_versions(session_id: str):
+    """List all saved report versions for a session (newest first)."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    versions = await get_report_versions(session_id)
+    return {"session_id": session_id, "versions": versions, "count": len(versions)}
+
+
+@app.get("/research/{session_id}/versions/{version}")
+async def get_report_version_detail(session_id: str, version: int):
+    """Retrieve the full report for a specific historical version."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    report = await get_report_version(session_id, version)
+    if report is None:
+        raise HTTPException(status_code=404, detail=f"Version {version} not found")
+    return {"session_id": session_id, "version": version, "report": report}
 
 
 @app.post("/research/bulk/delete")

@@ -1815,3 +1815,118 @@ async def delete_document(doc_id: str, user_id: str) -> bool:
             doc_id, user_id,
         )
         return result == "DELETE 1"
+
+
+# ── Report versioning ─────────────────────────────────────────────────────────
+# In-memory fallback (list of version dicts per session_id)
+_mem_report_versions: dict[str, list[dict]] = {}
+
+_VERSIONS_DDL = """
+CREATE TABLE IF NOT EXISTS report_versions (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    version     INTEGER NOT NULL,
+    report      JSONB NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+_VERSIONS_IDX = (
+    "CREATE INDEX IF NOT EXISTS idx_report_versions_session "
+    "ON report_versions(session_id, version DESC)"
+)
+
+
+async def _ensure_versions_table(conn) -> None:
+    await conn.execute(_VERSIONS_DDL)
+    await conn.execute(_VERSIONS_IDX)
+
+
+async def save_report_version(session_id: str, report: dict) -> dict:
+    """Snapshot the current report as a new version (max 10 kept per session)."""
+    now = datetime.now(timezone.utc).isoformat()
+    pool = await get_pool()
+
+    if not pool:
+        versions = _mem_report_versions.setdefault(session_id, [])
+        version_num = (versions[-1]["version"] + 1) if versions else 1
+        doc = {"id": str(uuid.uuid4()), "session_id": session_id,
+               "version": version_num, "report": report, "created_at": now}
+        versions.append(doc)
+        # Keep only the last 10
+        _mem_report_versions[session_id] = versions[-10:]
+        return doc
+
+    async with pool.acquire() as conn:
+        try:
+            await _ensure_versions_table(conn)
+            row = await conn.fetchrow(
+                "SELECT COALESCE(MAX(version), 0) AS v FROM report_versions WHERE session_id=$1",
+                session_id,
+            )
+            version_num = (row["v"] or 0) + 1
+            vid = str(uuid.uuid4())
+            await conn.execute(
+                "INSERT INTO report_versions(id, session_id, version, report) VALUES($1,$2,$3,$4)",
+                vid, session_id, version_num, json.dumps(report),
+            )
+            # Prune old versions — keep last 10
+            await conn.execute(
+                """DELETE FROM report_versions WHERE session_id=$1
+                   AND id NOT IN (
+                     SELECT id FROM report_versions WHERE session_id=$1
+                     ORDER BY version DESC LIMIT 10
+                   )""",
+                session_id, session_id,
+            )
+            return {"id": vid, "session_id": session_id, "version": version_num, "created_at": now}
+        except Exception as exc:
+            logger.warning("save_report_version failed: %s", exc)
+            return {}
+
+
+async def get_report_versions(session_id: str) -> list[dict]:
+    """Return all saved versions for a session, newest first."""
+    pool = await get_pool()
+
+    if not pool:
+        versions = list(reversed(_mem_report_versions.get(session_id, [])))
+        return [{"id": v["id"], "session_id": v["session_id"],
+                 "version": v["version"], "created_at": v["created_at"]} for v in versions]
+
+    async with pool.acquire() as conn:
+        try:
+            await _ensure_versions_table(conn)
+            rows = await conn.fetch(
+                "SELECT id, session_id, version, created_at FROM report_versions "
+                "WHERE session_id=$1 ORDER BY version DESC",
+                session_id,
+            )
+            return [dict(r) for r in rows]
+        except Exception as exc:
+            logger.warning("get_report_versions failed: %s", exc)
+            return []
+
+
+async def get_report_version(session_id: str, version: int) -> dict | None:
+    """Return the report dict for a specific version number."""
+    pool = await get_pool()
+
+    if not pool:
+        for v in _mem_report_versions.get(session_id, []):
+            if v["version"] == version:
+                return v["report"]
+        return None
+
+    async with pool.acquire() as conn:
+        try:
+            await _ensure_versions_table(conn)
+            row = await conn.fetchrow(
+                "SELECT report FROM report_versions WHERE session_id=$1 AND version=$2",
+                session_id, version,
+            )
+            if row:
+                r = row["report"]
+                return json.loads(r) if isinstance(r, str) else r
+        except Exception as exc:
+            logger.warning("get_report_version failed: %s", exc)
+        return None

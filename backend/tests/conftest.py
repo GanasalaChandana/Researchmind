@@ -45,9 +45,10 @@ def _reset_state():
     from app import main
     main._mem.clear()
 
-    # Clear in-memory comments store
+    # Clear in-memory comments and report versions stores
     from app import database
     database._mem_comments.clear()
+    database._mem_report_versions.clear()
 
     yield
 
