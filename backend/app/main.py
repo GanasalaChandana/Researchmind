@@ -1335,6 +1335,11 @@ async def stream_research(
                         if title_lower not in seen_titles:
                             unique_sources.append(s)
                             seen_titles.add(title_lower)
+                    # Sort final source list by quality score (highest first)
+                    unique_sources.sort(
+                        key=lambda s: s.quality_score if hasattr(s, "quality_score") else 0,
+                        reverse=True,
+                    )
 
                     # Ensure sources are included when saving
                     report_dict = report.model_dump()

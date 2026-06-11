@@ -38,10 +38,16 @@ async def synthesize(
         message="Building knowledge graph from extracted entities...",
     ), None
 
+    # Sort by quality score so highest-authority sources are cited first
+    ranked_sources = sorted(
+        [s for s in sources if s.summary],
+        key=lambda s: s.quality_score,
+        reverse=True,
+    )
+
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title}\nURL: {s.url}\n{s.summary}"
-        for i, s in enumerate(sources)
-        if s.summary
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\n{s.summary}"
+        for i, s in enumerate(ranked_sources)
     )
 
     lang_instruction = f"\nIMPORTANT: Write all text in {language}." if language != "English" else ""
@@ -109,7 +115,7 @@ Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdow
 
     report_prompt = f"""Write a comprehensive research report on: {topic}
 
-Sources (cite by number like [1], [2]):
+Sources are ranked by authority score (higher = more credible). Prioritise high-authority sources when citing evidence. Cite by number like [1], [2]:
 {sources_text}{doc_context_text}
 
 Sub-questions addressed:

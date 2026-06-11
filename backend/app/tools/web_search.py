@@ -3,6 +3,7 @@ import logging
 import httpx
 from ..models.schemas import Source
 from ..config import TAVILY_API_KEY
+from .source_scorer import score_source
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +26,22 @@ async def web_search(query: str, max_results: int = 5, max_retries: int = 3) -> 
                 resp = await client.post("https://api.tavily.com/search", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-                return [
-                    Source(
-                        url=r.get("url", ""),
-                        title=r.get("title", ""),
+                sources = []
+                for r in data.get("results", []):
+                    url = r.get("url", "")
+                    title = r.get("title", "")
+                    scores = score_source(url, title)
+                    sources.append(Source(
+                        url=url,
+                        title=title,
                         summary=r.get("content", ""),
                         relevance_score=r.get("score", 0.5),
-                    )
-                    for r in data.get("results", [])
-                ]
+                        quality_score=scores["quality_score"],
+                        domain_authority=scores["domain_authority"],
+                        recency_score=scores["recency_score"],
+                    ))
+                # Return highest-quality sources first
+                return sorted(sources, key=lambda s: s.quality_score, reverse=True)
         except Exception as exc:
             msg = str(exc).lower()
             is_rate_limit = any(sig in msg for sig in _RATE_LIMIT_SIGNALS)
