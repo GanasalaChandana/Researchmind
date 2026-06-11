@@ -78,11 +78,6 @@ export default function ResearchSessionPage() {
         startStream();
       });
 
-    // Request notification permission non-intrusively
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
-
     function startStream() {
       if (!topic) return;
       const es = streamResearch(sessionId, topic, depth, undefined, language, docIds.length ? docIds : undefined);
@@ -198,8 +193,8 @@ export default function ResearchSessionPage() {
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
 
-          {/* Notification permission nudge — only shown while running + permission not yet granted */}
-          {status === "running" && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default" && (
+          {/* Notification permission nudge — only shown while running + permission not yet granted/denied */}
+          {status === "running" && typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" && (
             <button
               onClick={() => Notification.requestPermission().catch(() => {})}
               className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-400 transition-colors px-2 py-1 rounded-lg hover:bg-amber-400/10"
