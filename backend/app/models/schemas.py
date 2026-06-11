@@ -22,6 +22,13 @@ class WebhookRequest(BaseModel):
     events: list[str] = Field(default=["completed", "failed"], max_length=10)
     secret: Optional[str] = Field(default=None, max_length=200)
 
+    @field_validator("url")
+    @classmethod
+    def url_must_be_https(cls, v: str) -> str:
+        if not v.startswith("https://"):
+            raise ValueError("Webhook URL must start with https://")
+        return v
+
 
 class AgentEvent(BaseModel):
     type: str  # "thinking" | "searching" | "reading" | "synthesizing" | "done" | "error"

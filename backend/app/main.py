@@ -211,8 +211,8 @@ async def _get(session_id: str):
         row = await get_session(session_id)
         if row:
             return row
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB get failed for session %s, using memory fallback: %s", session_id[:8], exc)
     return _mem.get(session_id)
 
 
@@ -552,7 +552,7 @@ async def _send_schedule_ready_email(
 from pydantic import BaseModel as _PydanticBase, Field as _Field
 
 class ChatMessage(_PydanticBase):
-    message: str
+    message: str = _Field(..., min_length=1, max_length=2000)
 
 
 def _build_report_context(report: dict, max_chars: int = 8000) -> str:
