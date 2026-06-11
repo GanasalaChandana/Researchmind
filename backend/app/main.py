@@ -8,7 +8,8 @@ from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at start
 
 from groq import Groq as _GroqClient
 
-from fastapi import FastAPI, HTTPException, Depends, Query, Body
+from fastapi import FastAPI, HTTPException, Depends, Query, Body, UploadFile, File
+import io
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from .models.schemas import ResearchRequest, AgentEvent, WebhookRequest, FavoriteRequest
@@ -28,6 +29,7 @@ from .database import (
     create_schedule_db, list_schedules_db, get_schedule_db,
     update_schedule_run, toggle_schedule_active,
     delete_schedule_db, get_all_active_schedules,
+    save_document, get_documents_text, delete_document,
 )
 from .tools.error_handler import friendly_error
 from .tools.language_detect import detect_language
@@ -543,6 +545,68 @@ async def health():
     return {"status": "ok", "version": "3.9.0-crosskg"}
 
 
+# ---------------------------------------------------------------------------
+# Document upload
+# ---------------------------------------------------------------------------
+
+def _extract_text(filename: str, data: bytes) -> str:
+    """Extract plain text from uploaded bytes. Supports PDF and text files."""
+    lower = filename.lower()
+    if lower.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse PDF: {e}")
+    # Plain text / markdown / CSV
+    try:
+        return data.decode("utf-8", errors="replace")
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not decode file as text")
+
+
+ALLOWED_TYPES = {".pdf", ".txt", ".md", ".csv"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/documents/upload")
+async def upload_documents(
+    files: list[UploadFile] = File(...),
+    current_user=Depends(get_current_user),
+):
+    results = []
+    for file in files:
+        suffix = "." + (file.filename or "").rsplit(".", 1)[-1].lower()
+        if suffix not in ALLOWED_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=f"{file.filename}: unsupported type. Allowed: PDF, TXT, MD, CSV",
+            )
+        data = await file.read()
+        if len(data) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"{file.filename} exceeds 10 MB limit")
+        text = _extract_text(file.filename, data)
+        if not text.strip():
+            raise HTTPException(status_code=422, detail=f"{file.filename}: no text could be extracted")
+        doc = await save_document(
+            user_id=current_user["id"],
+            filename=file.filename,
+            file_type=suffix.lstrip("."),
+            text_content=text,
+        )
+        results.append(doc)
+    return {"documents": results}
+
+
+@app.delete("/documents/{doc_id}")
+async def remove_document(doc_id: str, current_user=Depends(get_current_user)):
+    ok = await delete_document(doc_id, current_user["id"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"ok": True}
+
+
 @app.post("/research/start")
 async def start_research(
     request: ResearchRequest,
@@ -916,7 +980,7 @@ async def retry_research(session_id: str):
 
 
 @app.get("/research/{session_id}/stream")
-async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None):
+async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None, doc_ids: str = None):
     async def event_generator():
         all_sources = []
         sub_questions = []
@@ -957,6 +1021,14 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
 
             lang = language if language else detect_language(topic)
 
+            # Fetch uploaded document texts if doc_ids were provided
+            _session_meta = _mem.get(session_id, {})
+            _user_id_for_docs = _session_meta.get("user_id")
+            doc_contexts = []
+            if doc_ids and _user_id_for_docs:
+                parsed_ids = [d.strip() for d in doc_ids.split(",") if d.strip()]
+                doc_contexts = await get_documents_text(parsed_ids, _user_id_for_docs)
+
             # Phase 1: Orchestrator (skip if custom prompts provided)
             if not sub_questions:
                 async for event in orchestrate(topic, depth, language=lang):
@@ -983,7 +1055,7 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                 await asyncio.sleep(0)
 
             # Phase 4: Synthesize
-            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang):
+            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang, doc_contexts=doc_contexts or None):
                 if report:
                     # Deduplicate sources by title before saving (final safety check)
                     seen_titles = set()

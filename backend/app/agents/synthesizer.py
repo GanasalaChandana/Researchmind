@@ -14,6 +14,7 @@ async def synthesize(
     sources: list[Source],
     sub_questions: list[str],
     language: str = "English",
+    doc_contexts: list[dict] | None = None,
 ) -> AsyncGenerator[tuple[AgentEvent, ResearchReport | None], None]:
     client = Groq(api_key=GROQ_API_KEY)
 
@@ -31,11 +32,20 @@ async def synthesize(
 
     lang_instruction = f"\nIMPORTANT: Write all text in {language}." if language != "English" else ""
 
+    # Build uploaded-document context block (truncated to ~4k chars each to stay within token limits)
+    doc_context_text = ""
+    if doc_contexts:
+        doc_parts = []
+        for d in doc_contexts:
+            snippet = d["text_content"][:4000]
+            doc_parts.append(f"[DOC: {d['filename']}]\n{snippet}")
+        doc_context_text = "\n\nUser-uploaded documents (treat as primary sources, reference by filename):\n" + "\n\n".join(doc_parts)
+
     # Step 1: Extract knowledge graph
     kg_prompt = f"""Extract a knowledge graph from these research sources about: {topic}
 
 Sources:
-{sources_text}
+{sources_text}{doc_context_text}
 
 Return a JSON object:
 {{
@@ -85,7 +95,7 @@ Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdow
     report_prompt = f"""Write a comprehensive research report on: {topic}
 
 Sources (cite by number like [1], [2]):
-{sources_text}
+{sources_text}{doc_context_text}
 
 Sub-questions addressed:
 {chr(10).join(f"- {q}" for q in sub_questions)}

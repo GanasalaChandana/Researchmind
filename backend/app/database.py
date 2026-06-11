@@ -279,6 +279,22 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_chain_steps_session ON chain_steps(session_id)"
         )
 
+        # ── Uploaded documents ────────────────────────────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS uploaded_documents (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                filename    TEXT NOT NULL,
+                file_type   TEXT NOT NULL,
+                text_content TEXT NOT NULL,
+                char_count  INTEGER NOT NULL DEFAULT 0,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_uploaded_docs_user ON uploaded_documents(user_id)"
+        )
+
 
 async def create_chain_db(
     user_id: str,
@@ -1608,3 +1624,49 @@ async def get_all_active_schedules() -> list[dict]:
     except Exception as e:
         print(f"Failed to fetch active schedules: {e}")
         return []
+
+
+# ---------------------------------------------------------------------------
+# Uploaded documents
+# ---------------------------------------------------------------------------
+
+async def save_document(
+    user_id: str,
+    filename: str,
+    file_type: str,
+    text_content: str,
+) -> dict:
+    pool = await get_pool()
+    doc_id = f"doc_{secrets.token_hex(8)}"
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO uploaded_documents (id, user_id, filename, file_type, text_content, char_count)
+               VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, filename, file_type, char_count, created_at""",
+            doc_id, user_id, filename, file_type, text_content, len(text_content),
+        )
+        d = dict(row)
+        d["created_at"] = d["created_at"].isoformat()
+        return d
+
+
+async def get_documents_text(doc_ids: list[str], user_id: str) -> list[dict]:
+    """Return [{filename, text_content}] for the given IDs owned by user_id."""
+    if not doc_ids:
+        return []
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT filename, text_content FROM uploaded_documents WHERE id = ANY($1) AND user_id = $2",
+            doc_ids, user_id,
+        )
+        return [dict(r) for r in rows]
+
+
+async def delete_document(doc_id: str, user_id: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM uploaded_documents WHERE id=$1 AND user_id=$2",
+            doc_id, user_id,
+        )
+        return result == "DELETE 1"

@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
+import DocumentUploader from "@/components/DocumentUploader";
+import { type UploadedDoc } from "@/lib/api";
 import PromptCustomizer from "@/components/PromptCustomizer";
 import AuthModal from "@/components/AuthModal";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -187,6 +189,7 @@ export default function HomePage() {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(RESEARCH_TEMPLATES[0].category);
+  const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
 
   // Rotating tagline word
   useEffect(() => {
@@ -438,7 +441,8 @@ export default function HomePage() {
       const existing: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
       localStorage.setItem("rm_sessions", JSON.stringify([session_id, ...existing]));
       const langParam = language !== "English" ? `&language=${encodeURIComponent(language)}` : "";
-      router.push(`/research/${session_id}?topic=${encodeURIComponent(topic.trim())}&depth=${depth}${langParam}`);
+      const docParam = uploadedDocs.length > 0 ? `&doc_ids=${uploadedDocs.map(d => d.id).join(",")}` : "";
+      router.push(`/research/${session_id}?topic=${encodeURIComponent(topic.trim())}&depth=${depth}${langParam}${docParam}`);
     } catch {
       toast.error("Failed to start research. Is the backend running?");
       setLoading(false);
@@ -784,6 +788,11 @@ export default function HomePage() {
               <span className="text-xs text-slate-500">{t.questions}</span>
             </div>
           </div>
+
+          {/* Document uploader — only for authenticated users */}
+          {isAuthenticated && (
+            <DocumentUploader docs={uploadedDocs} onChange={setUploadedDocs} />
+          )}
 
           <button
             type="submit"

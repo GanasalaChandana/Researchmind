@@ -29,6 +29,7 @@ export function streamResearch(
   depth = 3,
   customPrompts?: string[],
   language?: string,
+  docIds?: string[],
 ): EventSource {
   const params = new URLSearchParams({ topic, depth: String(depth) });
   if (customPrompts && customPrompts.length > 0) {
@@ -37,8 +38,46 @@ export function streamResearch(
   if (language && language !== "English") {
     params.append("language", language);
   }
+  if (docIds && docIds.length > 0) {
+    params.append("doc_ids", docIds.join(","));
+  }
   // Use Next.js API proxy to avoid Vercel SSE buffering issues
   return new EventSource(`/api/research/${sessionId}/stream?${params}`);
+}
+
+export interface UploadedDoc {
+  id: string;
+  filename: string;
+  file_type: string;
+  char_count: number;
+  created_at: string;
+}
+
+export async function uploadDocuments(files: File[]): Promise<UploadedDoc[]> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (!token) throw new Error("Not authenticated");
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  const res = await fetch(`${BACKEND}/documents/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Upload failed");
+  }
+  const data = await res.json();
+  return data.documents ?? [];
+}
+
+export async function deleteUploadedDoc(docId: string): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (!token) throw new Error("Not authenticated");
+  await fetch(`${BACKEND}/documents/${docId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 export async function getReport(sessionId: string) {

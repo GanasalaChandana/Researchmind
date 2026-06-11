@@ -33,6 +33,7 @@ export default function ResearchSessionPage() {
   const topic = searchParams.get("topic") ?? "";
   const depth = Number(searchParams.get("depth") ?? 3);
   const language = searchParams.get("language") ?? "English";
+  const docIds = searchParams.get("doc_ids")?.split(",").filter(Boolean) ?? [];
 
   const { t } = useLanguage();
   const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -79,7 +80,7 @@ export default function ResearchSessionPage() {
 
     function startStream() {
       if (!topic) return;
-      const es = streamResearch(sessionId, topic, depth, undefined, language);
+      const es = streamResearch(sessionId, topic, depth, undefined, language, docIds.length ? docIds : undefined);
 
       es.onmessage = (e) => {
         try {
