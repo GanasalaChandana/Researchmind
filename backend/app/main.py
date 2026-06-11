@@ -731,6 +731,97 @@ async def remove_comment(comment_id: str, current_user=Depends(get_current_user)
     return {"ok": True}
 
 
+@app.get("/research/compare")
+async def compare_sessions(
+    a: str = Query(..., min_length=1, max_length=100, description="Session ID A"),
+    b: str = Query(..., min_length=1, max_length=100, description="Session ID B"),
+):
+    """Compare two completed research reports side-by-side."""
+    from .tools.report_compare import compare_reports
+    if a == b:
+        raise HTTPException(status_code=400, detail="Session IDs must be different")
+
+    sess_a, sess_b = await asyncio.gather(_get(a), _get(b))
+    if not sess_a or not sess_a.get("report"):
+        raise HTTPException(status_code=404, detail=f"Session {a!r} not found or has no report")
+    if not sess_b or not sess_b.get("report"):
+        raise HTTPException(status_code=404, detail=f"Session {b!r} not found or has no report")
+
+    def _parse(raw):
+        if isinstance(raw, str):
+            return json.loads(raw)
+        return raw
+
+    return compare_reports(_parse(sess_a["report"]), _parse(sess_b["report"]), a, b)
+
+
+@app.get("/research/search")
+async def search_reports(
+    q: str = Query(..., min_length=1, max_length=200, description="Search query"),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: dict = Depends(get_optional_user),
+):
+    """Full-text search across stored research report content."""
+    from .tools.report_search import search_sessions
+    user_id = current_user["id"] if current_user else None
+    try:
+        sessions = await _list(user_id=user_id)
+    except Exception:
+        sessions = list(_mem.values())
+
+    results = search_sessions(sessions, q)[:limit]
+
+    return {
+        "query": q,
+        "total": len(results),
+        "results": [
+            {
+                "session_id": s.get("id"),
+                "topic": s.get("topic"),
+                "status": s.get("status"),
+                "created_at": s.get("created_at"),
+                "score": s["_search"]["score"],
+                "matches": s["_search"]["matches"],
+            }
+            for s in results
+        ],
+    }
+
+
+@app.post("/research/{session_id}/refresh")
+async def refresh_research(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Force a cache-bypassing re-run of a completed research session."""
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("user_id") and session["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your session")
+    if session.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Session is already running")
+
+    topic = session.get("topic", "")
+    if not topic:
+        raise HTTPException(status_code=400, detail="Session has no topic to re-research")
+
+    # Create a fresh session for the refreshed run, preserving the same topic
+    new_session_id = str(uuid.uuid4())
+    await _create(new_session_id, topic, user_id=current_user["id"])
+
+    logger.info(
+        "Research refresh: new=%s original=%s topic=%s",
+        new_session_id[:8], session_id[:8], topic[:50],
+    )
+    return {
+        "new_session_id": new_session_id,
+        "original_session_id": session_id,
+        "topic": topic,
+        "note": "Stream the new session — cache is bypassed for this run",
+    }
+
+
 @app.get("/research/trending")
 async def get_trending_topics(
     days: int = Query(default=7, ge=1, le=90),
@@ -1222,6 +1313,7 @@ async def stream_research(
     language: str = Query(default=None, max_length=100),
     doc_ids: str = Query(default=None, max_length=500),
     model_tier: str = Query(default="balanced", pattern="^(fast|balanced|deep)$"),
+    bypass_cache: bool = Query(default=False),
 ):
     async def event_generator():
         all_sources = []
@@ -1244,8 +1336,8 @@ async def stream_research(
                 except:
                     pass  # Fall back to orchestrator
 
-            # Check cache first
-            cached_report = await get_cached_research(topic)
+            # Check cache first (skipped on forced refresh)
+            cached_report = None if bypass_cache else await get_cached_research(topic)
             if cached_report:
                 cache_hits_total.inc()
                 yield {"data": AgentEvent(
