@@ -563,9 +563,11 @@ async def preflight_handler():
 
 @app.get("/health")
 async def health():
-    """Health check — returns 200 when DB is reachable, 503 when degraded."""
+    """Health check — 200 when healthy or DB not configured, 503 when DB is
+    configured but unreachable (pool failed to connect)."""
     from fastapi.responses import JSONResponse as _JSONResponse
-    db_ok = False
+    db_url_set = bool(os.environ.get("DATABASE_URL"))
+    db_ok = not db_url_set  # default: ok when no DB is expected
     try:
         pool = await get_pool()
         if pool:
@@ -573,8 +575,9 @@ async def health():
                 await _conn.fetchval("SELECT 1")
             db_ok = True
     except Exception:
-        pass
-    payload = {"status": "ok" if db_ok else "degraded", "checks": {"db": db_ok}}
+        db_ok = False
+    status = "ok" if db_ok else "degraded"
+    payload = {"status": status, "checks": {"db": db_ok, "db_configured": db_url_set}}
     return _JSONResponse(payload, status_code=200 if db_ok else 503)
 
 
