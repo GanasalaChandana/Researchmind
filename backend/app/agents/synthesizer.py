@@ -1,11 +1,31 @@
 import json
 import re
 import asyncio
+import time
+import logging
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
 from ..tools.citation_verifier import verify_citations
 from ..config import GROQ_API_KEY
+
+logger = logging.getLogger(__name__)
+
+
+def _groq_with_retry(client: Groq, max_retries: int = 3, **kwargs):
+    """Call client.chat.completions.create with exponential backoff on rate-limit errors."""
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            msg = str(exc).lower()
+            is_rate_limit = "rate_limit" in msg or "429" in msg or "too many requests" in msg
+            if is_rate_limit and attempt < max_retries - 1:
+                wait = 2 ** (attempt + 1)   # 2s, 4s
+                logger.warning("Groq rate limit hit, retrying in %ds (attempt %d/%d)", wait, attempt + 1, max_retries)
+                time.sleep(wait)
+                continue
+            raise
 
 
 GROQ_MODELS = {
@@ -70,7 +90,8 @@ Return a JSON object:
 Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
-    kg_response = client.chat.completions.create(
+    kg_response = _groq_with_retry(
+        client,
         model=model_id,
         max_tokens=2000,
         messages=[{"role": "user", "content": kg_prompt}],
@@ -124,7 +145,8 @@ Return a JSON object:
 
 Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
 
-    report_response = client.chat.completions.create(
+    report_response = _groq_with_retry(
+        client,
         model=model_id,
         max_tokens=max_report_tokens,
         messages=[{"role": "user", "content": report_prompt}],

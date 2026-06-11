@@ -8,7 +8,9 @@ load_dotenv(dotenv_path=_env_path, override=True, encoding="utf-8-sig")
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "researchmind-change-in-production")
+
+_JWT_DEFAULT = "researchmind-change-in-production"
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", _JWT_DEFAULT)
 
 # Email delivery (Resend) — optional. If unset, reset codes are returned in the API
 # response as a dev fallback instead of being emailed.
@@ -23,3 +25,8 @@ if not GROQ_API_KEY:
     _warnings.warn("GROQ_API_KEY is not set — LLM calls will fail at runtime.")
 if not TAVILY_API_KEY:
     _warnings.warn("TAVILY_API_KEY is not set — web search calls will fail at runtime.")
+if JWT_SECRET_KEY == _JWT_DEFAULT:
+    _warnings.warn(
+        "JWT_SECRET_KEY is using the insecure default. Set JWT_SECRET_KEY in .env before deploying.",
+        stacklevel=2,
+    )

@@ -4,9 +4,11 @@ import json
 import uuid
 import secrets
 import hashlib
+import logging
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
+logger = logging.getLogger(__name__)
 
 _pool: Optional[asyncpg.Pool] = None
 
@@ -16,7 +18,7 @@ async def get_pool() -> Optional[asyncpg.Pool]:
     if _pool is None:
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
-            print("⚠️  DATABASE_URL not set")
+            logger.warning("DATABASE_URL not set — running without database")
             return None
         try:
             # asyncpg needs postgresql:// scheme
@@ -35,9 +37,9 @@ async def get_pool() -> Optional[asyncpg.Pool]:
                 statement_cache_size=0,
                 command_timeout=30,
             )
-            print("✅ Postgres pool connected")
+            logger.info("Postgres pool connected")
         except Exception as e:
-            print(f"❌ Postgres connection failed: {type(e).__name__}: {e}")
+            logger.error("Postgres connection failed: %s: %s", type(e).__name__, e)
             return None
     return _pool
 
@@ -307,6 +309,17 @@ async def init_db():
         """)
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_uploaded_docs_user ON uploaded_documents(user_id)"
+        )
+
+        # ── Performance indexes for sessions (high-traffic queries) ──────────
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC)"
         )
 
 
@@ -706,7 +719,9 @@ async def list_sessions(
             params.append(f"%{search_query}%")
 
         if days_back:
-            query += " AND created_at > NOW() - INTERVAL '" + str(days_back) + " days'"
+            # Parameterised INTERVAL cast — prevents SQL injection via days_back value
+            query += " AND created_at > NOW() - ($" + str(len(params) + 1) + " || ' days')::INTERVAL"
+            params.append(str(int(days_back)))
 
         if favorites_only:
             query += " AND is_favorite = TRUE"

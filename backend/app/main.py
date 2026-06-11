@@ -1,10 +1,18 @@
 import asyncio
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at startup
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 from groq import Groq as _GroqClient
 
@@ -18,7 +26,7 @@ from .agents.search_agent import search
 from .agents.reader_agent import read_sources
 from .agents.synthesizer import synthesize
 from .database import (
-    init_db, create_session, update_session, get_session, list_sessions,
+    init_db, get_pool, create_session, update_session, get_session, list_sessions,
     delete_session, get_cached_research, cache_research, set_favorite,
     create_share_token, get_shared_session, list_share_tokens, delete_share_token,
     add_tag, remove_tag, list_user_tags, get_user_dashboard_stats,
@@ -57,24 +65,27 @@ async def lifespan(app: FastAPI):
     # Initialize DB tables on startup
     try:
         await init_db()
-        print("✅ Database initialized")
+        logger.info("Database initialized")
     except Exception as e:
-        print(f"⚠️  Database not available: {e} — falling back to in-memory")
+        logger.warning("Database not available: %s — falling back to in-memory", e)
     try:
         await init_user_tables()
-        print("✅ User tables initialized")
+        logger.info("User tables initialized")
     except Exception as e:
-        print(f"⚠️  User tables not available: {e} — using in-memory fallback")
+        logger.warning("User tables not available: %s — using in-memory fallback", e)
 
     # Start scheduler and register all active persisted schedules
     _scheduler.start()
-    asyncio.create_task(_reload_all_schedules())
-    print("✅ Scheduler started")
+    _bg_task(_reload_all_schedules())
+    logger.info("Scheduler started")
 
     yield
 
-    _scheduler.shutdown(wait=False)
-    print("🛑 Scheduler stopped")
+    _scheduler.shutdown(wait=True)
+    pool = await get_pool()
+    if pool:
+        await pool.close()
+    logger.info("Shutdown complete")
 
 
 app = FastAPI(
@@ -115,6 +126,18 @@ app.add_middleware(
 
 # Fallback in-memory store (used if DB is unavailable)
 _mem: dict[str, dict] = {}
+
+
+def _bg_task(coro) -> asyncio.Task:
+    """Schedule a fire-and-forget coroutine, logging any unhandled exceptions."""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(_on_bg_task_done)
+    return task
+
+
+def _on_bg_task_done(task: asyncio.Task) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        logger.error("Background task failed: %s", task.exception(), exc_info=task.exception())
 
 
 async def _create(session_id: str, topic: str, user_id: str = None):
@@ -219,9 +242,9 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
                 await add_tag(session_id, tag_name, color)
             except Exception:
                 pass  # best-effort; don't crash the pipeline
-        print(f"✅ Auto-tagged session {session_id[:8]}: {tags}")
+        logger.info("Auto-tagged session %s: %s", session_id[:8], tags)
     except Exception as e:
-        print(f"⚠️  Auto-tagging failed for {session_id[:8]}: {e}")
+        logger.warning("Auto-tagging failed for %s: %s", session_id[:8], e)
 
 
 # ─── Cross-session KG entity extraction ─────────────────────────────────────
@@ -246,9 +269,9 @@ async def _extract_entities_to_graph(
 
     try:
         await store_kg_entities(session_id, entities, relationships, user_id)
-        print(f"✅ KG stored for {session_id[:8]}: {len(entities)} entities, {len(relationships)} edges")
+        logger.info("KG stored for %s: %d entities, %d edges", session_id[:8], len(entities), len(relationships))
     except Exception as e:
-        print(f"⚠️  KG extraction failed for {session_id[:8]}: {e}")
+        logger.warning("KG extraction failed for %s: %s", session_id[:8], e)
 
 
 # ─── Scheduled research ──────────────────────────────────────────────────────
@@ -282,7 +305,7 @@ def _register_job(sched: dict) -> None:
         replace_existing=True,
         misfire_grace_time=7200,   # fire even if server was down ≤ 2 hours
     )
-    print(f"📅 Registered schedule {job_id[:8]}: '{sched['topic'][:40]}' ({freq})")
+    logger.info("Registered schedule %s: '%s' (%s)", job_id[:8], sched['topic'][:40], freq)
 
 
 async def _reload_all_schedules() -> None:
@@ -291,9 +314,9 @@ async def _reload_all_schedules() -> None:
         schedules = await get_all_active_schedules()
         for s in schedules:
             _register_job(s)
-        print(f"✅ Reloaded {len(schedules)} active schedule(s)")
+        logger.info("Reloaded %d active schedule(s)", len(schedules))
     except Exception as exc:
-        print(f"⚠️  Could not reload schedules: {exc}")
+        logger.warning("Could not reload schedules: %s", exc)
 
 
 async def _fire_schedule(
@@ -303,13 +326,11 @@ async def _fire_schedule(
     """Called by APScheduler when a cron job fires.
     Creates a new session and kicks off the full pipeline in the background.
     """
-    print(f"🔔 Schedule firing: '{topic[:50]}' (id={schedule_id[:8]})")
+    logger.info("Schedule firing: '%s' (id=%s)", topic[:50], schedule_id[:8])
     session_id = str(uuid.uuid4())
     await _create(session_id, topic, user_id=user_id)
     await update_schedule_run(schedule_id, session_id)
-    asyncio.create_task(
-        _run_pipeline_bg(session_id, topic, depth, user_id, notify_email)
-    )
+    _bg_task(_run_pipeline_bg(session_id, topic, depth, user_id, notify_email))
 
 
 async def _run_pipeline_bg(
@@ -361,11 +382,11 @@ async def _run_pipeline_bg(
         if report_dict:
             await _update(session_id, "completed", report_dict)
             await cache_research(topic, report_dict)
-            asyncio.create_task(_auto_tag_session(session_id, topic, report_dict, user_id))
-            asyncio.create_task(_extract_entities_to_graph(session_id, report_dict, user_id))
+            _bg_task(_auto_tag_session(session_id, topic, report_dict, user_id))
+            _bg_task(_extract_entities_to_graph(session_id, report_dict, user_id))
             if notify_email:
-                asyncio.create_task(_send_schedule_ready_email(user_id, topic, session_id))
-            print(f"✅ Scheduled pipeline done: {session_id[:8]} — {topic[:40]}")
+                _bg_task(_send_schedule_ready_email(user_id, topic, session_id))
+            logger.info("Scheduled pipeline done: %s — %s", session_id[:8], topic[:40])
         else:
             await _update(session_id, "failed")
 
@@ -384,10 +405,10 @@ async def _advance_chain_if_needed(session_id: str, user_id: str | None) -> None
         new_sid = str(uuid.uuid4())
         await _create(new_sid, next_step["topic"], user_id=next_uid)
         await start_chain_step(next_step["id"], new_sid)
-        asyncio.create_task(_run_chain_step_bg(new_sid, next_step["topic"], next_uid))
-        print(f"⛓️ Chain step {next_step['step_order']}: {next_step['topic'][:40]}")
+        _bg_task(_run_chain_step_bg(new_sid, next_step["topic"], next_uid))
+        logger.info("Chain step %d: %s", next_step['step_order'], next_step['topic'][:40])
     except Exception as exc:
-        print(f"⛓️ Chain advance error: {exc}")
+        logger.error("Chain advance error: %s", exc)
 
 
 async def _run_chain_step_bg(session_id: str, topic: str, user_id: str) -> None:
@@ -479,7 +500,7 @@ async def _send_schedule_ready_email(
 
 # ─── Chat with report ────────────────────────────────────────────────────────
 
-from pydantic import BaseModel as _PydanticBase
+from pydantic import BaseModel as _PydanticBase, Field as _Field
 
 class ChatMessage(_PydanticBase):
     message: str
@@ -542,8 +563,19 @@ async def preflight_handler():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
-    return {"status": "ok", "version": "3.9.0-crosskg"}
+    """Health check — returns 200 when DB is reachable, 503 when degraded."""
+    from fastapi.responses import JSONResponse as _JSONResponse
+    db_ok = False
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as _conn:
+                await _conn.fetchval("SELECT 1")
+            db_ok = True
+    except Exception:
+        pass
+    payload = {"status": "ok" if db_ok else "degraded", "checks": {"db": db_ok}}
+    return _JSONResponse(payload, status_code=200 if db_ok else 503)
 
 
 # ---------------------------------------------------------------------------
@@ -555,15 +587,14 @@ async def list_comments(session_id: str):
     return {"comments": await get_comments(session_id)}
 
 
+class _CommentCreate(_PydanticBase):
+    author_name: str = _Field(default="", max_length=80)
+    content: str = _Field(..., min_length=1, max_length=2000)
+
+
 @app.post("/research/{session_id}/comments")
-async def post_comment(
-    session_id: str,
-    author_name: str = Body(...),
-    content: str = Body(...),
-):
-    if not content.strip():
-        raise HTTPException(status_code=422, detail="Comment cannot be empty")
-    comment = await add_comment(session_id, author_name or "Anonymous", content)
+async def post_comment(session_id: str, body: _CommentCreate):
+    comment = await add_comment(session_id, body.author_name.strip() or "Anonymous", body.content.strip())
     return comment
 
 
@@ -1129,24 +1160,20 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
 
                     # 🏷️ Auto-tag: LLM generates 3-5 topic tags in the background
                     _user_id = _mem.get(session_id, {}).get("user_id")
-                    asyncio.create_task(
-                        _auto_tag_session(session_id, topic, report_dict, _user_id)
-                    )
+                    _bg_task(_auto_tag_session(session_id, topic, report_dict, _user_id))
 
                     # 🕸️ KG extraction: store entities into cross-session graph tables
-                    asyncio.create_task(
-                        _extract_entities_to_graph(session_id, report_dict, _user_id)
-                    )
+                    _bg_task(_extract_entities_to_graph(session_id, report_dict, _user_id))
 
                     # 🔔 Fire webhook: research completed
-                    asyncio.create_task(fire_webhook_event(
+                    _bg_task(fire_webhook_event(
                         session_id, "completed",
                         {"topic": topic, "session_id": session_id, "summary": report_dict.get("summary", "")[:500]},
                         user_id=_user_id,
                     ))
 
                     # ⛓️ Chain: advance to next step if this session is part of a chain
-                    asyncio.create_task(_advance_chain_if_needed(session_id, _user_id))
+                    _bg_task(_advance_chain_if_needed(session_id, _user_id))
 
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
@@ -1155,13 +1182,13 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
             await _update(session_id, "failed")
             _fail_uid = _mem.get(session_id, {}).get("user_id")
             # 🔔 Fire webhook: research failed
-            asyncio.create_task(fire_webhook_event(
+            _bg_task(fire_webhook_event(
                 session_id, "failed",
                 {"topic": topic, "session_id": session_id, "error": str(e)},
                 user_id=_fail_uid,
             ))
             # ⛓️ Chain: mark step as failed
-            asyncio.create_task(fail_chain_step(session_id))
+            _bg_task(fail_chain_step(session_id))
             error_event = AgentEvent(type="error", agent="system", message=friendly_error(e))
             yield {"data": error_event.model_dump_json()}
 
@@ -1549,12 +1576,10 @@ async def run_schedule_now(
     session_id = str(uuid.uuid4())
     await _create(session_id, sched["topic"], user_id=current_user["id"])
     await update_schedule_run(schedule_id, session_id)
-    asyncio.create_task(
-        _run_pipeline_bg(
-            session_id, sched["topic"], sched.get("depth", 3),
-            current_user["id"], sched.get("notify_email", True),
-        )
-    )
+    _bg_task(_run_pipeline_bg(
+        session_id, sched["topic"], sched.get("depth", 3),
+        current_user["id"], sched.get("notify_email", True),
+    ))
     return {"session_id": session_id, "topic": sched["topic"], "status": "triggered"}
 
 
@@ -1624,7 +1649,7 @@ async def create_chain(
         first = chain["steps"][0]
         await start_chain_step(first["id"], req.root_session_id)
         if req.auto_run and len(chain["steps"]) > 1:
-            asyncio.create_task(_advance_chain_if_needed(req.root_session_id, current_user["id"]))
+            _bg_task(_advance_chain_if_needed(req.root_session_id, current_user["id"]))
 
     # Reload with updated step states
     chain = await get_chain_db(chain["id"])
