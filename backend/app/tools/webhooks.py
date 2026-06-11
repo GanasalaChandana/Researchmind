@@ -15,9 +15,33 @@ _webhooks: dict[str, list[dict]] = {}
 MAX_RETRIES = 3
 RETRY_DELAYS = [2, 8, 32]  # exponential backoff: 2s → 8s → 32s
 
+# Server-side signing secret used when the caller didn't supply one.
+# Allows receivers to verify authenticity even without a custom secret.
+_SERVER_SIGNING_SECRET = secrets.token_hex(32)
 
-def _sign_payload(payload: str, secret: str) -> str:
-    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+def _sign_payload(body: str, secret: str, timestamp: str) -> str:
+    """HMAC-SHA256 over 'timestamp.body' — includes timestamp to prevent replay attacks."""
+    message = f"{timestamp}.{body}"
+    return hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_webhook_signature(
+    body: str,
+    signature: str,
+    secret: str,
+    timestamp: str,
+    max_age_seconds: int = 300,
+) -> bool:
+    """Verify an incoming webhook signature. Rejects replays older than max_age_seconds."""
+    try:
+        ts = int(timestamp)
+        if abs(time.time() - ts) > max_age_seconds:
+            return False
+        expected = _sign_payload(body, secret, timestamp)
+        return hmac.compare_digest(expected, signature)
+    except Exception:
+        return False
 
 
 # ─── In-memory per-session API (public API backward compat) ──────────────────
@@ -64,13 +88,18 @@ async def _post_once(
     webhook: dict,
     body: str,
 ) -> tuple[bool, Optional[int], Optional[str], int]:
+    timestamp = str(int(time.time()))
+    signing_secret = webhook.get("secret") or _SERVER_SIGNING_SECRET
+    sig = _sign_payload(body, signing_secret, timestamp)
+
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "ResearchMind-Webhooks/1.0",
+        "X-ResearchMind-Signature": f"sha256={sig}",
+        "X-ResearchMind-Timestamp": timestamp,
+        # Indicate whether this was signed with a user-supplied or server secret
+        "X-ResearchMind-Signed-With": "custom" if webhook.get("secret") else "server",
     }
-    if webhook.get("secret"):
-        sig = _sign_payload(body, webhook["secret"])
-        headers["X-ResearchMind-Signature"] = f"sha256={sig}"
 
     t0 = time.monotonic()
     try:

@@ -131,13 +131,16 @@ _default_origin_regex = (
 )
 ALLOWED_ORIGIN_REGEX = _os.environ.get("ALLOWED_ORIGIN_REGEX", _default_origin_regex)
 
+from fastapi.middleware.gzip import GZipMiddleware as _GZipMiddleware
+app.add_middleware(_GZipMiddleware, minimum_size=500)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
 
 from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
@@ -159,6 +162,19 @@ app.add_middleware(_RequestIDMiddleware)
 
 import time as _time
 from .tools.metrics import http_request_duration_seconds as _http_duration
+
+class _RateLimitHeaderMiddleware(_BaseHTTPMiddleware):
+    """Forward X-RateLimit-* headers stashed by check_rate_limit onto the response."""
+    async def dispatch(self, request: Request, call_next) -> _StarletteResponse:
+        response = await call_next(request)
+        headers = getattr(request.state, "rate_limit_headers", None)
+        if headers:
+            for k, v in headers.items():
+                response.headers[k] = v
+        return response
+
+app.add_middleware(_RateLimitHeaderMiddleware)
+
 
 class _MetricsMiddleware(_BaseHTTPMiddleware):
     """Record HTTP request latency for Prometheus."""

@@ -33,6 +33,9 @@ def check_rate_limit(
 
     `bucket` namespaces the limit (e.g. "login"); `extra_key` lets you scope it
     further (e.g. the target email) so one attacker can't lock out everyone.
+
+    On success, attaches X-RateLimit-* headers to the request state so the
+    response middleware can forward them to the client.
     """
     now = time.time()
     ip = _client_ip(request)
@@ -44,15 +47,31 @@ def check_rate_limit(
     while dq and dq[0] < cutoff:
         dq.popleft()
 
-    if len(dq) >= max_attempts:
+    remaining = max_attempts - len(dq)
+    reset_ts = int(dq[0] + window_seconds) + 1 if dq else int(now + window_seconds)
+
+    if remaining <= 0:
         retry_after = int(window_seconds - (now - dq[0])) + 1
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many attempts. Try again in {retry_after} seconds.",
-            headers={"Retry-After": str(retry_after)},
+            headers={
+                "Retry-After": str(retry_after),
+                "X-RateLimit-Limit": str(max_attempts),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(reset_ts),
+            },
         )
 
     dq.append(now)
+    remaining -= 1  # account for this request
+
+    # Stash on request.state so the middleware can add them to the response
+    request.state.rate_limit_headers = {
+        "X-RateLimit-Limit": str(max_attempts),
+        "X-RateLimit-Remaining": str(remaining),
+        "X-RateLimit-Reset": str(reset_ts),
+    }
 
     # Opportunistic cleanup to bound memory: drop empty buckets occasionally
     if len(_hits) > 10000:
