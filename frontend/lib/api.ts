@@ -257,6 +257,55 @@ export async function searchReportContent(query: string): Promise<SearchResult[]
   }
 }
 
+// ─── Bulk operations ──────────────────────────────────────────────────────────
+
+export async function bulkDeleteSessions(sessionIds: string[]): Promise<{ deleted: number }> {
+  const res = await fetch("/api/research/bulk/delete", {
+    method: "POST",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ session_ids: sessionIds }),
+  });
+  if (!res.ok) throw new Error("Bulk delete failed");
+  return res.json();
+}
+
+export async function bulkTagSessions(sessionIds: string[], tags: string[]): Promise<{ updated: number }> {
+  const res = await fetch("/api/research/bulk/tag", {
+    method: "POST",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ session_ids: sessionIds, tags }),
+  });
+  if (!res.ok) throw new Error("Bulk tag failed");
+  return res.json();
+}
+
+// ─── Report versioning ────────────────────────────────────────────────────────
+
+export interface ReportVersion {
+  version: number;
+  created_at: string;
+  session_id: string;
+}
+
+export async function getReportVersions(sessionId: string): Promise<ReportVersion[]> {
+  const res = await fetch(`/api/research/${sessionId}/versions`, {
+    headers: _authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.versions ?? [];
+}
+
+export async function getReportVersion(sessionId: string, version: number): Promise<any | null> {
+  const res = await fetch(`/api/research/${sessionId}/versions/${version}`, {
+    headers: _authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getDashboardStats(): Promise<any> {
   const headers: Record<string, string> = {};
   const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;

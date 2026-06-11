@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { streamResearch, createShareLink } from "@/lib/api";
+import { streamResearch, createShareLink, getReportVersions, getReportVersion, type ReportVersion } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
@@ -11,7 +11,7 @@ import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import RelatedResearch from "@/components/RelatedResearch";
 import ReportChat from "@/components/ReportChat";
 import ChainCreator from "@/components/ChainCreator";
-import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy } from "lucide-react";
+import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy, History, ChevronDown, ChevronUp } from "lucide-react";
 import toast from "react-hot-toast";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -47,6 +47,10 @@ export default function ResearchSessionPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareLinking, setShareLinking] = useState(false);
+  const [versions, setVersions] = useState<ReportVersion[]>([]);
+  const [showVersions, setShowVersions] = useState(false);
+  const [loadingVersion, setLoadingVersion] = useState<number | null>(null);
+  const [versionReport, setVersionReport] = useState<{ version: number; report: any } | null>(null);
   const completedRef = useRef(false);
 
   useEffect(() => {
@@ -160,6 +164,28 @@ export default function ResearchSessionPage() {
     await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  // Load report version list when session is completed
+  useEffect(() => {
+    if (status !== "completed" || !sessionId) return;
+    getReportVersions(sessionId).then(setVersions).catch(() => {});
+  }, [status, sessionId]);
+
+  async function handleLoadVersion(v: number) {
+    setLoadingVersion(v);
+    try {
+      const data = await getReportVersion(sessionId, v);
+      if (data?.report) {
+        setVersionReport({ version: v, report: data.report });
+      } else {
+        toast.error("Version not found");
+      }
+    } catch {
+      toast.error("Failed to load version");
+    } finally {
+      setLoadingVersion(null);
+    }
   }
 
   const graph: KnowledgeGraph = report?.knowledge_graph ?? { entities: [], relationships: [] };
@@ -325,6 +351,80 @@ export default function ResearchSessionPage() {
       {/* Research Chain — continue this topic into a series */}
       {status === "completed" && (
         <ChainCreator sessionId={sessionId} topic={topic || report?.topic || ""} />
+      )}
+
+      {/* Version History Panel — shown when completed and versions exist */}
+      {status === "completed" && versions.length > 0 && (
+        <div className="mt-6 glass rounded-xl overflow-hidden">
+          <button
+            onClick={() => setShowVersions((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-brand-400" />
+              Report Version History
+              <span className="text-xs bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full border border-brand-500/30">
+                {versions.length}
+              </span>
+            </div>
+            {showVersions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showVersions && (
+            <div className="border-t border-white/8 px-5 py-4">
+              {versionReport && (
+                <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center justify-between">
+                  <span className="text-xs text-amber-300">
+                    Viewing snapshot from Version {versionReport.version}
+                  </span>
+                  <button
+                    onClick={() => setVersionReport(null)}
+                    className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" /> Back to current
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {versions.map((v) => (
+                  <div
+                    key={v.version}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
+                      versionReport?.version === v.version
+                        ? "bg-brand-500/15 border-brand-500/30"
+                        : "bg-white/[0.02] border-white/8 hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-brand-400 w-16">v{v.version}</span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(v.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleLoadVersion(v.version)}
+                      disabled={loadingVersion === v.version}
+                      className="text-xs px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {loadingVersion === v.version
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : versionReport?.version === v.version ? "Viewing" : "View"
+                      }
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Snapshot viewer — renders below the list */}
+              {versionReport && (
+                <div className="mt-4 pt-4 border-t border-white/8">
+                  <ReportViewer report={versionReport.report} sessionId={sessionId} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Share Modal */}

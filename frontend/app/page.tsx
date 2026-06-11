@@ -5,7 +5,7 @@ import {
   startResearch, deleteResearch, retryResearch, toggleFavorite,
   addTag, removeTag, getUserTags,
   listCollections, createCollection, deleteCollection, moveSessionToCollection,
-  searchReportContent,
+  searchReportContent, bulkDeleteSessions, bulkTagSessions,
   type Collection, type SearchResult,
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,6 +15,7 @@ import {
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
   SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3, Code2, CalendarClock, Webhook, Link2,
   FolderOpen, Plus, Check, FolderPlus, Brain, Network, FileText, Zap,
+  Square, CheckSquare, Tags,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -154,6 +155,10 @@ export default function HomePage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "failed">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagInput, setBulkTagInput] = useState("");
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -342,6 +347,45 @@ export default function HomePage() {
     });
     return result;
   }, [sessions, sortOrder]);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} session(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedIds);
+    try {
+      await bulkDeleteSessions(ids);
+      setSessions((prev) => prev.filter((s) => !ids.includes(s.id)));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      toast.success(`Deleted ${ids.length} session(s)`);
+    } catch {
+      toast.error("Bulk delete failed");
+    }
+  }
+
+  async function handleBulkTag() {
+    const tags = bulkTagInput.split(",").map((t) => t.trim()).filter(Boolean);
+    if (tags.length === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      await bulkTagSessions(ids, tags);
+      setShowBulkTagModal(false);
+      setBulkTagInput("");
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      toast.success(`Tagged ${ids.length} session(s)`);
+    } catch {
+      toast.error("Bulk tag failed");
+    }
+  }
 
   async function handleToggleFavorite(s: SessionSummary) {
     if (!isAuthenticated) {
@@ -634,6 +678,83 @@ export default function HomePage() {
             onClose={() => setShowOnboarding(false)}
             onSignIn={() => { setShowOnboarding(false); setShowAuthModal(true); }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Action Bar — floats at bottom when select mode is active */}
+      <AnimatePresence>
+        {selectMode && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/15 bg-slate-900/95 backdrop-blur-lg shadow-2xl shadow-black/40"
+          >
+            <span className="text-sm text-slate-300 font-medium min-w-[80px]">
+              {selectedIds.size} selected
+            </span>
+            <button
+              disabled={selectedIds.size === 0}
+              onClick={() => setShowBulkTagModal(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/30 disabled:opacity-40 transition-colors"
+            >
+              <Tags className="w-3.5 h-3.5" /> Tag
+            </button>
+            <button
+              disabled={selectedIds.size === 0}
+              onClick={handleBulkDelete}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 disabled:opacity-40 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+            <button
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+              className="text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white glass transition-colors"
+            >
+              Cancel
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Tag Modal */}
+      <AnimatePresence>
+        {showBulkTagModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <h3 className="text-base font-semibold text-white mb-1">Tag {selectedIds.size} session(s)</h3>
+              <p className="text-xs text-slate-500 mb-4">Comma-separated tags, e.g. <span className="text-brand-400">ai, research, 2026</span></p>
+              <input
+                type="text"
+                value={bulkTagInput}
+                onChange={(e) => setBulkTagInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleBulkTag()}
+                placeholder="tag1, tag2, ..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-brand-500 mb-4"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkTag}
+                  disabled={!bulkTagInput.trim()}
+                  className="flex-1 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm rounded-lg transition-colors"
+                >
+                  Apply Tags
+                </button>
+                <button
+                  onClick={() => { setShowBulkTagModal(false); setBulkTagInput(""); }}
+                  className="px-4 py-2 glass text-slate-400 hover:text-white text-sm rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -1150,6 +1271,21 @@ export default function HomePage() {
                     </span>
                   )}
                 </button>
+
+                {/* Select mode toggle */}
+                {isAuthenticated && filteredSessions.length > 0 && (
+                  <button
+                    onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors ${
+                      selectMode
+                        ? "bg-brand-500 text-white"
+                        : "dark:text-slate-400 text-slate-600 hover:text-brand-500 glass"
+                    }`}
+                  >
+                    {selectMode ? <CheckSquare className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+                    Select
+                  </button>
+                )}
               </div>
               </div>
             </div>
@@ -1457,12 +1593,27 @@ export default function HomePage() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.97 }}
-                      className="relative group"
+                      className="relative group flex items-center gap-2"
                     >
+                      {/* Select checkbox */}
+                      {selectMode && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleSelect(s.id); }}
+                          className="shrink-0 w-5 h-5 flex items-center justify-center text-brand-400"
+                        >
+                          {selectedIds.has(s.id)
+                            ? <CheckSquare className="w-5 h-5 text-brand-400" />
+                            : <Square className="w-5 h-5 text-slate-500" />
+                          }
+                        </button>
+                      )}
+
                       {/* Card */}
                       <div
-                        onClick={() => router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
-                        className="relative rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.07] hover:bg-slate-50/80 dark:hover:border-white/15 hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-lg dark:hover:shadow-brand-500/5 hover:translate-y-[-1px]"
+                        onClick={() => selectMode ? toggleSelect(s.id) : router.push(`/research/${s.id}?topic=${encodeURIComponent(s.topic)}&depth=3`)}
+                        className={`relative flex-1 rounded-2xl border dark:border-white/8 border-slate-200 dark:bg-white/[0.03] bg-white hover:dark:bg-white/[0.07] hover:bg-slate-50/80 dark:hover:border-white/15 hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden shadow-sm hover:shadow-lg dark:hover:shadow-brand-500/5 hover:translate-y-[-1px] ${
+                          selectMode && selectedIds.has(s.id) ? "ring-2 ring-brand-500/60" : ""
+                        }`}
                       >
                         {/* Left status accent bar */}
                         <div className={`absolute inset-y-0 left-0 w-[3px] rounded-l-2xl transition-all duration-200 ${
