@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from groq import Groq as _GroqClient
 
-from fastapi import FastAPI, HTTPException, Depends, Query, Body, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Query, Body, Request, UploadFile, File
 import io
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -41,6 +41,7 @@ from .database import (
     add_comment, get_comments, delete_comment,
 )
 from .tools.error_handler import friendly_error
+from .tools.rate_limit import check_rate_limit
 from .tools.language_detect import detect_language
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.webhooks import (
@@ -120,9 +121,26 @@ app.add_middleware(
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
+from starlette.responses import Response as _StarletteResponse
+
+class _RequestIDMiddleware(_BaseHTTPMiddleware):
+    """Attach a unique X-Request-ID to every request and response for log correlation."""
+    async def dispatch(self, request: Request, call_next) -> _StarletteResponse:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
+        import contextvars as _cv
+        _request_id_var.set(req_id)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = req_id
+        return response
+
+import contextvars as _cv_mod
+_request_id_var: _cv_mod.ContextVar[str] = _cv_mod.ContextVar("request_id", default="-")
+app.add_middleware(_RequestIDMiddleware)
 
 # Fallback in-memory store (used if DB is unavailable)
 _mem: dict[str, dict] = {}
@@ -147,8 +165,8 @@ async def _create(session_id: str, topic: str, user_id: str = None):
     _mem[session_id] = data
     try:
         await create_session(session_id, topic, user_id=user_id)
-    except Exception:
-        pass  # use memory fallback
+    except Exception as exc:
+        logger.warning("DB write failed for session %s, using memory fallback: %s", session_id[:8], exc)
 
 
 async def _set_favorite(session_id: str, is_favorite: bool):
@@ -156,8 +174,8 @@ async def _set_favorite(session_id: str, is_favorite: bool):
         _mem[session_id]["is_favorite"] = is_favorite
     try:
         await set_favorite(session_id, is_favorite)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB favorite update failed for %s: %s", session_id[:8], exc)
 
 
 async def _update(session_id: str, status: str, report=None):
@@ -167,8 +185,8 @@ async def _update(session_id: str, status: str, report=None):
             _mem[session_id]["report"] = report
     try:
         await update_session(session_id, status, report)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB update failed for session %s, using memory fallback: %s", session_id[:8], exc)
 
 
 async def _get(session_id: str):
@@ -391,7 +409,7 @@ async def _run_pipeline_bg(
             await _update(session_id, "failed")
 
     except Exception as exc:
-        print(f"❌ Scheduled pipeline error ({session_id[:8]}): {exc}")
+        logger.error("Scheduled pipeline error (%s): %s", session_id[:8], exc, exc_info=exc)
         await _update(session_id, "failed")
 
 
@@ -495,7 +513,7 @@ async def _send_schedule_ready_email(
 </div>"""
         await send_email(user["email"], f"Research ready: {topic[:60]}", html)
     except Exception as exc:
-        print(f"⚠️  Schedule email failed: {exc}")
+        logger.warning("Schedule email failed for user %s: %s", user_id, exc)
 
 
 # ─── Chat with report ────────────────────────────────────────────────────────
@@ -610,7 +628,10 @@ async def remove_comment(comment_id: str, current_user=Depends(get_current_user)
 
 
 @app.get("/research/trending")
-async def get_trending_topics(days: int = 7, limit: int = 12):
+async def get_trending_topics(
+    days: int = Query(default=7, ge=1, le=90),
+    limit: int = Query(default=12, ge=1, le=50),
+):
     """Return most-researched topics across all users in the last N days (anonymised)."""
     try:
         pool = await get_pool()
@@ -696,9 +717,19 @@ async def remove_document(doc_id: str, current_user=Depends(get_current_user)):
 
 @app.post("/research/start")
 async def start_research(
+    http_request: Request,
     request: ResearchRequest,
     current_user: dict = Depends(get_optional_user),
 ):
+    # 10 research sessions per IP per hour (unauthenticated); 20 for authenticated
+    bucket_key = current_user["id"] if current_user else ""
+    check_rate_limit(
+        http_request,
+        bucket="research_start",
+        max_attempts=20 if current_user else 10,
+        window_seconds=3600,
+        extra_key=bucket_key,
+    )
     session_id = str(uuid.uuid4())
     user_id = current_user["id"] if current_user else None
     await _create(session_id, request.topic, user_id=user_id)
@@ -707,14 +738,14 @@ async def start_research(
 
 @app.get("/research/sessions/list")
 async def get_sessions(
-    status: str = None,
-    search: str = None,
-    days: int = None,
-    limit: int = 20,
-    offset: int = 0,
+    status: str = Query(default=None, max_length=20),
+    search: str = Query(default=None, max_length=200),
+    days: int = Query(default=None, ge=1, le=365),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     favorites: bool = False,
-    tag: str = None,
-    collection: str = None,
+    tag: str = Query(default=None, max_length=80),
+    collection: str = Query(default=None, max_length=100),
     current_user: dict = Depends(get_optional_user),
 ):
     """List sessions with pagination — filters to current user's sessions if authenticated"""
@@ -1067,7 +1098,16 @@ async def retry_research(session_id: str):
 
 
 @app.get("/research/{session_id}/stream")
-async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None, doc_ids: str = None, model_tier: str = "balanced"):
+async def stream_research(
+    session_id: str,
+    http_request: Request,
+    topic: str = Query(..., min_length=1, max_length=500),
+    depth: int = Query(default=3, ge=1, le=10),
+    custom_prompts: str = Query(default=None, max_length=5000),
+    language: str = Query(default=None, max_length=100),
+    doc_ids: str = Query(default=None, max_length=500),
+    model_tier: str = Query(default="balanced", pattern="^(fast|balanced|deep)$"),
+):
     async def event_generator():
         all_sources = []
         sub_questions = []

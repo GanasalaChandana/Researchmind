@@ -1,9 +1,13 @@
+import logging
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source
 from ..tools.url_reader import read_url
 from ..tools.source_scorer import score_source
 from ..config import GROQ_API_KEY
+from ..tools.groq_retry import groq_with_retry
+
+logger = logging.getLogger(__name__)
 
 
 async def read_sources(sources: list[Source], language: str = "English") -> AsyncGenerator[tuple[AgentEvent, Source], None]:
@@ -30,16 +34,16 @@ Content:
 Return only the summary, no preamble."""
 
             try:
-                response = client.chat.completions.create(
+                response = groq_with_retry(
+                    client,
                     model="llama-3.1-8b-instant",
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300,
                     temperature=0.2,
                 )
                 source.summary = response.choices[0].message.content.strip()
-            except Exception:
-                # If summarization fails, keep the original snippet
-                pass
+            except Exception as exc:
+                logger.warning("Summarization failed for %s: %s", source.url, exc)
         else:
             # If read_url fails, use original snippet if available
             if not source.summary:

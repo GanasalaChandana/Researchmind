@@ -5,6 +5,7 @@ from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent
 from ..config import GROQ_API_KEY
+from ..tools.groq_retry import groq_with_retry
 
 
 async def orchestrate(topic: str, depth: int, language: str = "English") -> AsyncGenerator[AgentEvent, None]:
@@ -33,7 +34,8 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    response = client.chat.completions.create(
+    response = groq_with_retry(
+        client,
         model="llama-3.3-70b-versatile",
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
