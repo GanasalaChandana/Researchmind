@@ -30,6 +30,7 @@ export function streamResearch(
   customPrompts?: string[],
   language?: string,
   docIds?: string[],
+  modelTier?: string,
 ): EventSource {
   const params = new URLSearchParams({ topic, depth: String(depth) });
   if (customPrompts && customPrompts.length > 0) {
@@ -40,6 +41,9 @@ export function streamResearch(
   }
   if (docIds && docIds.length > 0) {
     params.append("doc_ids", docIds.join(","));
+  }
+  if (modelTier && modelTier !== "balanced") {
+    params.append("model_tier", modelTier);
   }
   // Use Next.js API proxy to avoid Vercel SSE buffering issues
   return new EventSource(`/api/research/${sessionId}/stream?${params}`);

@@ -7,6 +7,7 @@ import ReportViewer from "@/components/ReportViewer";
 import KnowledgeGraphView from "@/components/KnowledgeGraph";
 import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import { Network, FileText, Loader2, ArrowLeft, Lock } from "lucide-react";
+import ReportComments from "@/components/ReportComments";
 
 type Tab = "graph" | "report";
 
@@ -140,7 +141,10 @@ export default function SharedResearchPage() {
 
       {tab === "report" && (
         report
-          ? <ReportViewer report={report} sessionId="" />
+          ? <>
+              <ReportViewer report={report} sessionId="" />
+              <ReportComments sessionId={report.session_id} />
+            </>
           : (
             <div className="text-center py-16 text-slate-500 text-sm">
               Report not available

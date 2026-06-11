@@ -30,6 +30,7 @@ from .database import (
     update_schedule_run, toggle_schedule_active,
     delete_schedule_db, get_all_active_schedules,
     save_document, get_documents_text, delete_document,
+    add_comment, get_comments, delete_comment,
 )
 from .tools.error_handler import friendly_error
 from .tools.language_detect import detect_language
@@ -546,6 +547,58 @@ async def health():
 
 
 # ---------------------------------------------------------------------------
+# Shared report comments
+# ---------------------------------------------------------------------------
+
+@app.get("/research/{session_id}/comments")
+async def list_comments(session_id: str):
+    return {"comments": await get_comments(session_id)}
+
+
+@app.post("/research/{session_id}/comments")
+async def post_comment(
+    session_id: str,
+    author_name: str = Body(...),
+    content: str = Body(...),
+):
+    if not content.strip():
+        raise HTTPException(status_code=422, detail="Comment cannot be empty")
+    comment = await add_comment(session_id, author_name or "Anonymous", content)
+    return comment
+
+
+@app.delete("/research/comments/{comment_id}")
+async def remove_comment(comment_id: str, current_user=Depends(get_current_user)):
+    ok = await delete_comment(comment_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return {"ok": True}
+
+
+@app.get("/research/trending")
+async def get_trending_topics(days: int = 7, limit: int = 12):
+    """Return most-researched topics across all users in the last N days (anonymised)."""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT topic, COUNT(*) AS cnt
+                FROM sessions
+                WHERE status = 'completed'
+                  AND created_at > NOW() - ($1 || ' days')::INTERVAL
+                GROUP BY topic
+                ORDER BY cnt DESC
+                LIMIT $2
+                """,
+                str(days), limit,
+            )
+        return {"trending": [{"topic": r["topic"], "count": int(r["cnt"])} for r in rows]}
+    except Exception:
+        return {"trending": []}
+
+
+# ---------------------------------------------------------------------------
 # Document upload
 # ---------------------------------------------------------------------------
 
@@ -980,7 +1033,7 @@ async def retry_research(session_id: str):
 
 
 @app.get("/research/{session_id}/stream")
-async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None, doc_ids: str = None):
+async def stream_research(session_id: str, topic: str, depth: int = 3, custom_prompts: str = None, language: str = None, doc_ids: str = None, model_tier: str = "balanced"):
     async def event_generator():
         all_sources = []
         sub_questions = []
@@ -1055,7 +1108,7 @@ async def stream_research(session_id: str, topic: str, depth: int = 3, custom_pr
                 await asyncio.sleep(0)
 
             # Phase 4: Synthesize
-            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang, doc_contexts=doc_contexts or None):
+            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang, doc_contexts=doc_contexts or None, model_tier=model_tier):
                 if report:
                     # Deduplicate sources by title before saving (final safety check)
                     seen_titles = set()

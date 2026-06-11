@@ -8,6 +8,13 @@ from ..tools.citation_verifier import verify_citations
 from ..config import GROQ_API_KEY
 
 
+GROQ_MODELS = {
+    "fast":     "llama-3.1-8b-instant",
+    "balanced": "llama-3.3-70b-versatile",
+    "deep":     "llama-3.3-70b-versatile",  # same model, higher max_tokens
+}
+
+
 async def synthesize(
     topic: str,
     session_id: str,
@@ -15,7 +22,10 @@ async def synthesize(
     sub_questions: list[str],
     language: str = "English",
     doc_contexts: list[dict] | None = None,
+    model_tier: str = "balanced",
 ) -> AsyncGenerator[tuple[AgentEvent, ResearchReport | None], None]:
+    model_id = GROQ_MODELS.get(model_tier, GROQ_MODELS["balanced"])
+    max_report_tokens = 5000 if model_tier == "deep" else 3000
     client = Groq(api_key=GROQ_API_KEY)
 
     yield AgentEvent(
@@ -61,7 +71,7 @@ Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=model_id,
         max_tokens=2000,
         messages=[{"role": "user", "content": kg_prompt}],
     )
@@ -115,8 +125,8 @@ Return a JSON object:
 Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
 
     report_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        max_tokens=3000,
+        model=model_id,
+        max_tokens=max_report_tokens,
         messages=[{"role": "user", "content": report_prompt}],
     )
 

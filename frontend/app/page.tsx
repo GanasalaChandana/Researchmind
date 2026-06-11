@@ -190,11 +190,21 @@ export default function HomePage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(RESEARCH_TEMPLATES[0].category);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
+  const [trendingTopics, setTrendingTopics] = useState<{ topic: string; count: number }[]>([]);
+  const [modelTier, setModelTier] = useState<"fast" | "balanced" | "deep">("balanced");
 
   // Rotating tagline word
   useEffect(() => {
     const t = setInterval(() => setWordIdx(i => (i + 1) % ROTATING_WORDS.length), 2200);
     return () => clearInterval(t);
+  }, []);
+
+  // Fetch trending topics on mount
+  useEffect(() => {
+    fetch("/api/research/trending")
+      .then(r => r.json())
+      .then(d => setTrendingTopics(d.trending ?? []))
+      .catch(() => {});
   }, []);
 
   // Cycling placeholder in the search input
@@ -440,9 +450,10 @@ export default function HomePage() {
       // Save to localStorage so only this browser sees it in history
       const existing: string[] = JSON.parse(localStorage.getItem("rm_sessions") ?? "[]");
       localStorage.setItem("rm_sessions", JSON.stringify([session_id, ...existing]));
-      const langParam = language !== "English" ? `&language=${encodeURIComponent(language)}` : "";
-      const docParam = uploadedDocs.length > 0 ? `&doc_ids=${uploadedDocs.map(d => d.id).join(",")}` : "";
-      router.push(`/research/${session_id}?topic=${encodeURIComponent(topic.trim())}&depth=${depth}${langParam}${docParam}`);
+      const langParam  = language !== "English" ? `&language=${encodeURIComponent(language)}` : "";
+      const docParam   = uploadedDocs.length > 0 ? `&doc_ids=${uploadedDocs.map(d => d.id).join(",")}` : "";
+      const modelParam = modelTier !== "balanced" ? `&model_tier=${modelTier}` : "";
+      router.push(`/research/${session_id}?topic=${encodeURIComponent(topic.trim())}&depth=${depth}${langParam}${docParam}${modelParam}`);
     } catch {
       toast.error("Failed to start research. Is the backend running?");
       setLoading(false);
@@ -789,6 +800,30 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Model selector */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs dark:text-slate-500 text-slate-400 shrink-0">Model:</span>
+            {([
+              { key: "fast",     label: "Fast",     sub: "8B · quick",      color: "text-amber-400  border-amber-500/30  bg-amber-500/10"  },
+              { key: "balanced", label: "Balanced", sub: "70B · default",   color: "text-brand-400  border-brand-500/30  bg-brand-500/10"  },
+              { key: "deep",     label: "Deep",     sub: "70B · thorough",  color: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
+            ] as const).map(({ key, label, sub, color }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setModelTier(key)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all ${
+                  modelTier === key
+                    ? color
+                    : "dark:text-slate-500 text-slate-400 border-transparent hover:border-slate-600"
+                }`}
+              >
+                {label}
+                <span className="dark:text-slate-600 text-slate-400 hidden sm:inline">{sub}</span>
+              </button>
+            ))}
+          </div>
+
           {/* Document uploader — only for authenticated users */}
           {isAuthenticated && (
             <DocumentUploader docs={uploadedDocs} onChange={setUploadedDocs} />
@@ -914,6 +949,29 @@ export default function HomePage() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* ── Trending Topics ── */}
+        {trendingTopics.length > 0 && (
+          <div className="mt-5">
+            <p className="text-xs text-slate-500 mb-3 text-center tracking-wide uppercase font-medium flex items-center justify-center gap-1.5">
+              <span>🔥</span> Trending on ResearchMind
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {trendingTopics.map(({ topic, count }) => (
+                <motion.button
+                  key={topic}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setTopic(topic)}
+                  className="flex items-center gap-1.5 text-xs glass px-3.5 py-1.5 rounded-full dark:text-slate-300 text-slate-600 hover:text-brand-400 hover:border-brand-500/40 hover:bg-brand-500/5 transition-all border border-transparent"
+                >
+                  {topic}
+                  <span className="dark:text-slate-600 text-slate-400 text-[10px]">{count}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Examples */}
         <div className="mt-5">

@@ -279,6 +279,20 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_chain_steps_session ON chain_steps(session_id)"
         )
 
+        # ── Shared report comments ───────────────────────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS report_comments (
+                id          TEXT PRIMARY KEY,
+                session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                author_name TEXT NOT NULL,
+                content     TEXT NOT NULL,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_report_comments_session ON report_comments(session_id)"
+        )
+
         # ── Uploaded documents ────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS uploaded_documents (
@@ -1629,6 +1643,42 @@ async def get_all_active_schedules() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Uploaded documents
 # ---------------------------------------------------------------------------
+
+async def add_comment(session_id: str, author_name: str, content: str) -> dict:
+    pool = await get_pool()
+    cid = f"cmt_{secrets.token_hex(8)}"
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO report_comments (id, session_id, author_name, content)
+               VALUES ($1, $2, $3, $4) RETURNING *""",
+            cid, session_id, author_name.strip()[:80], content.strip()[:2000],
+        )
+        d = dict(row)
+        d["created_at"] = d["created_at"].isoformat()
+        return d
+
+
+async def get_comments(session_id: str) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM report_comments WHERE session_id=$1 ORDER BY created_at ASC",
+            session_id,
+        )
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["created_at"] = d["created_at"].isoformat()
+            result.append(d)
+        return result
+
+
+async def delete_comment(comment_id: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM report_comments WHERE id=$1", comment_id)
+        return result == "DELETE 1"
+
 
 async def save_document(
     user_id: str,
