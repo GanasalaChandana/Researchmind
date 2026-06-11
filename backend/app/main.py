@@ -936,6 +936,11 @@ async def start_research(
         window_seconds=3600,
         extra_key=bucket_key,
     )
+    from .tools.content_moderator import moderate_topic
+    blocked, reason = moderate_topic(request.topic)
+    if blocked:
+        raise HTTPException(status_code=451, detail=reason)
+
     session_id = str(uuid.uuid4())
     user_id = current_user["id"] if current_user else None
     await _create(session_id, request.topic, user_id=user_id)
@@ -991,6 +996,95 @@ async def get_sessions(
         "limit": limit,
         "has_more": offset + limit < total,
     }
+
+
+# ─── Bulk operations ─────────────────────────────────────────────────────────
+
+class _BulkDeleteRequest(_PydanticBase):
+    session_ids: list[str] = _Field(..., min_length=1, max_length=50)
+
+
+class _BulkTagRequest(_PydanticBase):
+    session_ids: list[str] = _Field(..., min_length=1, max_length=50)
+    tags: list[str] = _Field(..., min_length=1, max_length=20)
+
+
+@app.post("/research/bulk/delete")
+async def bulk_delete_sessions(
+    body: _BulkDeleteRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete multiple research sessions owned by the current user."""
+    deleted, skipped = [], []
+    for sid in body.session_ids:
+        session = await _get(sid)
+        if not session:
+            skipped.append({"id": sid, "reason": "not found"})
+            continue
+        if session.get("user_id") and session["user_id"] != current_user["id"]:
+            skipped.append({"id": sid, "reason": "forbidden"})
+            continue
+        _mem.pop(sid, None)
+        try:
+            await delete_session(sid)
+        except Exception:
+            pass
+        deleted.append(sid)
+    return {"deleted": deleted, "skipped": skipped, "count": len(deleted)}
+
+
+@app.post("/research/bulk/tag")
+async def bulk_tag_sessions(
+    body: _BulkTagRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Apply one or more tags to multiple sessions owned by the current user."""
+    results = []
+    for sid in body.session_ids:
+        session = await _get(sid)
+        if not session:
+            results.append({"id": sid, "status": "not_found"})
+            continue
+        if session.get("user_id") and session["user_id"] != current_user["id"]:
+            results.append({"id": sid, "status": "forbidden"})
+            continue
+        applied = []
+        for tag_name in body.tags:
+            try:
+                await add_tag(sid, tag_name, current_user["id"])
+                applied.append(tag_name)
+            except Exception:
+                pass
+        results.append({"id": sid, "status": "ok", "tags_applied": applied})
+    return {"results": results}
+
+
+# ─── ETag / conditional GET for session detail ───────────────────────────────
+
+@app.get("/research/{session_id}")
+async def get_session_detail(
+    session_id: str,
+    request: Request,
+):
+    """Get a single session. Supports ETag / If-None-Match for efficient polling."""
+    import hashlib as _hashlib
+    from fastapi.responses import Response as _ETResponse
+
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    body = json.dumps(session, default=str, sort_keys=True)
+    etag = f'"{_hashlib.sha1(body.encode()).hexdigest()[:16]}"'
+
+    if request.headers.get("if-none-match") == etag:
+        return _ETResponse(status_code=304, headers={"ETag": etag})
+
+    return _ETResponse(
+        content=body,
+        media_type="application/json",
+        headers={"ETag": etag, "Cache-Control": "no-cache"},
+    )
 
 
 # ─── Full-text report search ─────────────────────────────────────────────────
