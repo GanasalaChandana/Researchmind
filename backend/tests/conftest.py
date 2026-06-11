@@ -44,6 +44,11 @@ def _reset_state():
     # Clear the in-memory research-session store too
     from app import main
     main._mem.clear()
+
+    # Clear in-memory comments store
+    from app import database
+    database._mem_comments.clear()
+
     yield
 
 

@@ -1664,14 +1664,24 @@ async def get_all_active_schedules() -> list[dict]:
 # Uploaded documents
 # ---------------------------------------------------------------------------
 
+# In-memory fallback for comments (used when DB is unavailable)
+_mem_comments: dict[str, list[dict]] = {}
+
+
 async def add_comment(session_id: str, author_name: str, content: str) -> dict:
     pool = await get_pool()
     cid = f"cmt_{secrets.token_hex(8)}"
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {"id": cid, "session_id": session_id, "author_name": author_name.strip()[:80],
+           "content": content.strip()[:2000], "created_at": now}
+    if not pool:
+        _mem_comments.setdefault(session_id, []).append(doc)
+        return doc
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """INSERT INTO report_comments (id, session_id, author_name, content)
                VALUES ($1, $2, $3, $4) RETURNING *""",
-            cid, session_id, author_name.strip()[:80], content.strip()[:2000],
+            cid, session_id, doc["author_name"], doc["content"],
         )
         d = dict(row)
         d["created_at"] = d["created_at"].isoformat()
@@ -1680,6 +1690,8 @@ async def add_comment(session_id: str, author_name: str, content: str) -> dict:
 
 async def get_comments(session_id: str) -> list[dict]:
     pool = await get_pool()
+    if not pool:
+        return list(_mem_comments.get(session_id, []))
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT * FROM report_comments WHERE session_id=$1 ORDER BY created_at ASC",
@@ -1695,6 +1707,13 @@ async def get_comments(session_id: str) -> list[dict]:
 
 async def delete_comment(comment_id: str) -> bool:
     pool = await get_pool()
+    if not pool:
+        for comments in _mem_comments.values():
+            for i, c in enumerate(comments):
+                if c["id"] == comment_id:
+                    comments.pop(i)
+                    return True
+        return False
     async with pool.acquire() as conn:
         result = await conn.execute("DELETE FROM report_comments WHERE id=$1", comment_id)
         return result == "DELETE 1"
@@ -1730,6 +1749,50 @@ async def get_documents_text(doc_ids: list[str], user_id: str) -> list[dict]:
             doc_ids, user_id,
         )
         return [dict(r) for r in rows]
+
+
+async def cleanup_old_uploads(days: int = 30) -> int:
+    """Delete uploaded documents older than `days` days. Returns number of rows deleted."""
+    pool = await get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM uploaded_documents WHERE created_at < NOW() - ($1 || ' days')::INTERVAL",
+            str(days),
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    logger.info("Data retention: deleted %d uploaded documents older than %d days", deleted, days)
+    return deleted
+
+
+async def cleanup_old_chat_messages(days: int = 90) -> int:
+    """Delete chat messages older than `days` days. Returns number of rows deleted."""
+    pool = await get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM chat_messages WHERE created_at < NOW() - ($1 || ' days')::INTERVAL",
+            str(days),
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    logger.info("Data retention: deleted %d chat messages older than %d days", deleted, days)
+    return deleted
+
+
+async def cleanup_expired_cache() -> int:
+    """Delete research cache entries older than 7 days. Returns rows deleted."""
+    pool = await get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM research_cache WHERE cached_at < NOW() - INTERVAL '7 days'"
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    logger.info("Data retention: deleted %d stale cache entries", deleted)
+    return deleted
 
 
 async def count_user_documents(user_id: str) -> int:

@@ -38,6 +38,7 @@ from .database import (
     update_schedule_run, toggle_schedule_active,
     delete_schedule_db, get_all_active_schedules,
     save_document, get_documents_text, delete_document, count_user_documents,
+    cleanup_old_uploads, cleanup_old_chat_messages, cleanup_expired_cache,
     add_comment, get_comments, delete_comment,
 )
 from .tools.error_handler import friendly_error
@@ -78,6 +79,14 @@ async def lifespan(app: FastAPI):
     # Start scheduler and register all active persisted schedules
     _scheduler.start()
     _bg_task(_reload_all_schedules())
+    # Daily data-retention job: 03:00 UTC
+    _scheduler.add_job(
+        lambda: asyncio.ensure_future(_run_data_retention()),
+        trigger=_CronTrigger(hour=3, minute=0, timezone="UTC"),
+        id="data_retention",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     logger.info("Scheduler started")
 
     yield
@@ -92,13 +101,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ResearchMind API",
     description="Multi-agent AI Research API with JWT auth, public API keys, auto-tagging, webhooks, and streaming",
-    version="3.8.0",
+    version="4.0.0",
     lifespan=lifespan,
 )
 
-# Mount routers
+# Mount routers — auth and public API available under both root and /v1
 app.include_router(auth_router)
 app.include_router(public_api_router)
+app.include_router(auth_router, prefix="/v1")
+app.include_router(public_api_router, prefix="/v1")
 
 # CORS — restrict to known frontend origins. Auth uses bearer tokens (not cookies),
 # so allow_credentials is False, which keeps the config valid and the Public API usable.
@@ -141,6 +152,12 @@ class _RequestIDMiddleware(_BaseHTTPMiddleware):
 import contextvars as _cv_mod
 _request_id_var: _cv_mod.ContextVar[str] = _cv_mod.ContextVar("request_id", default="-")
 app.add_middleware(_RequestIDMiddleware)
+
+from fastapi import APIRouter as _APIRouter
+
+# v1 router — all new endpoint definitions go here; the app mounts it at /v1
+# Old unversioned routes remain for backward compatibility.
+v1 = _APIRouter(prefix="/v1", tags=["v1"])
 
 # Fallback in-memory store (used if DB is unavailable)
 _mem: dict[str, dict] = {}
@@ -290,6 +307,20 @@ async def _extract_entities_to_graph(
         logger.info("KG stored for %s: %d entities, %d edges", session_id[:8], len(entities), len(relationships))
     except Exception as e:
         logger.warning("KG extraction failed for %s: %s", session_id[:8], e)
+
+
+# ─── Daily data-retention cleanup ───────────────────────────────────────────
+
+async def _run_data_retention() -> None:
+    """Runs daily at 03:00 UTC. Deletes old uploads, chat history, stale cache."""
+    logger.info("Data retention job starting")
+    try:
+        await cleanup_old_uploads(days=30)
+        await cleanup_old_chat_messages(days=90)
+        await cleanup_expired_cache()
+        logger.info("Data retention job complete")
+    except Exception as exc:
+        logger.error("Data retention job failed: %s", exc, exc_info=exc)
 
 
 # ─── Scheduled research ──────────────────────────────────────────────────────
@@ -1904,6 +1935,31 @@ async def get_webhook_deliveries(
         raise HTTPException(status_code=404, detail="Webhook not found")
     deliveries = await list_webhook_deliveries(webhook_id, limit=limit)
     return {"deliveries": deliveries, "count": len(deliveries)}
+
+
+# ─── API version info ────────────────────────────────────────────────────────
+
+@app.get("/", tags=["meta"])
+async def api_root():
+    """API root — returns version and available prefixes."""
+    return {
+        "name": "ResearchMind API",
+        "version": "4.0.0",
+        "prefixes": {
+            "stable": "/v1",
+            "legacy": "/  (backward compat, no breaking changes planned)",
+        },
+        "docs": "/docs",
+    }
+
+
+@v1.get("/", tags=["meta"])
+async def v1_root():
+    return {"name": "ResearchMind API", "version": "4.0.0", "prefix": "/v1"}
+
+
+# Register v1 router last so its routes appear in /docs under the v1 tag
+app.include_router(v1)
 
 
 # ─── Collections (named folders) ─────────────────────────────────────────────
