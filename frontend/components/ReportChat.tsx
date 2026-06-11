@@ -6,6 +6,7 @@ import {
   MessageSquare, Send, ChevronDown,
   Bot, User, Loader2, Sparkles, RotateCcw,
 } from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ function token(): string {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ReportChat({ sessionId, topic, ready }: Props) {
+  const { t } = useLanguage();
   const [open, setOpen]         = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
@@ -203,9 +205,9 @@ export default function ReportChat({ sessionId, topic, ready }: Props) {
             <MessageSquare className="w-4 h-4 text-brand-400" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-white">Chat with this Report</p>
+            <p className="text-sm font-semibold text-white">{t.chatWithReport}</p>
             <p className="text-xs text-slate-500">
-              Ask follow-up questions — answered from the research
+              {t.chatWithReportSub}
             </p>
           </div>
           {messages.length > 0 && (

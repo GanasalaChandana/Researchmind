@@ -7,6 +7,7 @@ import {
   Play, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface Props {
   sessionId: string;
@@ -25,6 +26,7 @@ function auth() {
 }
 
 export default function ChainCreator({ sessionId, topic }: Props) {
+  const { t } = useLanguage();
   const [open, setOpen]             = useState(false);
   const [topics, setTopics]         = useState<string[]>([]);
   const [chainName, setChainName]   = useState("");
@@ -98,9 +100,9 @@ export default function ChainCreator({ sessionId, topic }: Props) {
             <Link2 className="w-4 h-4 text-violet-400" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-white">Continue as Research Chain</p>
+            <p className="text-sm font-semibold text-white">{t.continueAsChain}</p>
             <p className="text-xs text-slate-500">
-              Auto-queue follow-up topics into a sequential series
+              {t.continueAsChainSub}
             </p>
           </div>
         </div>
