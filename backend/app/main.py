@@ -45,6 +45,12 @@ from .tools.error_handler import friendly_error
 from .tools.rate_limit import check_rate_limit
 from .tools.language_detect import detect_language
 from .tools.export_formats import export_markdown, export_html, format_citations
+from .tools.pdf_export import generate_report_pdf
+from .tools.metrics import (
+    research_sessions_total, groq_calls_total,
+    cache_hits_total, cache_misses_total, export_requests_total,
+    active_sse_connections, ResearchTimer, get_metrics_output,
+)
 from .tools.webhooks import (
     register_webhook, list_webhooks, delete_webhook,
     fire_webhook_event,
@@ -152,6 +158,34 @@ class _RequestIDMiddleware(_BaseHTTPMiddleware):
 import contextvars as _cv_mod
 _request_id_var: _cv_mod.ContextVar[str] = _cv_mod.ContextVar("request_id", default="-")
 app.add_middleware(_RequestIDMiddleware)
+
+import time as _time
+from .tools.metrics import http_request_duration_seconds as _http_duration
+
+class _MetricsMiddleware(_BaseHTTPMiddleware):
+    """Record HTTP request latency for Prometheus."""
+    _SKIP = {"/metrics", "/health"}
+
+    async def dispatch(self, request: Request, call_next) -> _StarletteResponse:
+        if request.url.path in self._SKIP:
+            return await call_next(request)
+        start = _time.perf_counter()
+        response = await call_next(request)
+        elapsed = _time.perf_counter() - start
+        # Normalise dynamic segments so cardinality stays bounded
+        path = request.url.path
+        for seg in path.split("/"):
+            # Replace UUID-like or numeric segments with a placeholder
+            if len(seg) > 8 and ("-" in seg or seg.isdigit()):
+                path = path.replace(seg, "{id}", 1)
+        _http_duration.labels(
+            method=request.method,
+            path=path,
+            status_code=str(response.status_code),
+        ).observe(elapsed)
+        return response
+
+app.add_middleware(_MetricsMiddleware)
 
 from fastapi import APIRouter as _APIRouter
 
@@ -608,6 +642,14 @@ def _build_llm_messages(context: str, history: list[dict], topic: str) -> list[d
 @app.options("/{rest_of_path:path}")
 async def preflight_handler():
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus metrics endpoint — returns text/plain exposition format."""
+    from fastapi.responses import Response as _FResponse
+    body, content_type = get_metrics_output()
+    return _FResponse(content=body, media_type=content_type)
 
 
 @app.get("/health")
@@ -1159,6 +1201,10 @@ async def stream_research(
     async def event_generator():
         all_sources = []
         sub_questions = []
+        active_sse_connections.inc()
+        _research_timer = ResearchTimer()
+        _research_timer.__enter__()
+        research_sessions_total.labels(status="started").inc()
 
         try:
             # Parse custom prompts if provided
@@ -1176,6 +1222,7 @@ async def stream_research(
             # Check cache first
             cached_report = await get_cached_research(topic)
             if cached_report:
+                cache_hits_total.inc()
                 yield {"data": AgentEvent(
                     type="thinking",
                     agent="system",
@@ -1184,6 +1231,9 @@ async def stream_research(
 
                 # Save cached result to session
                 await _update(session_id, "completed", cached_report)
+                research_sessions_total.labels(status="completed").inc()
+                _research_timer.__exit__(None, None, None)
+                active_sse_connections.dec()
 
                 # Stream the cached report as if it was just generated
                 yield {"data": AgentEvent(
@@ -1193,6 +1243,8 @@ async def stream_research(
                     data={"report": cached_report},
                 ).model_dump_json()}
                 return
+
+            cache_misses_total.inc()
 
             lang = language if language else detect_language(topic)
 
@@ -1287,6 +1339,9 @@ async def stream_research(
                     report_dict = report.model_dump()
                     report_dict["sources"] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in unique_sources]
                     await _update(session_id, "completed", report_dict)
+                    research_sessions_total.labels(status="completed").inc()
+                    _research_timer.__exit__(None, None, None)
+                    active_sse_connections.dec()
 
                     # Cache the completed research for future queries
                     await cache_research(topic, report_dict)
@@ -1313,6 +1368,9 @@ async def stream_research(
 
         except Exception as e:
             await _update(session_id, "failed")
+            research_sessions_total.labels(status="failed").inc()
+            _research_timer.__exit__(None, None, None)
+            active_sse_connections.dec()
             _fail_uid = _mem.get(session_id, {}).get("user_id")
             # 🔔 Fire webhook: research failed
             _bg_task(fire_webhook_event(
@@ -1345,7 +1403,17 @@ async def export_research(session_id: str, format_type: str):
         sections = report_dict.get("sections", [])
         sources = report_dict.get("sources", [])
 
-        if format_type == "markdown":
+        if format_type == "pdf":
+            from fastapi.responses import Response as _PDFResponse
+            export_requests_total.labels(format="pdf").inc()
+            pdf_bytes = generate_report_pdf(report_dict, session_id)
+            return _PDFResponse(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=report-{session_id[:8]}.pdf"},
+            )
+        elif format_type == "markdown":
+            export_requests_total.labels(format="markdown").inc()
             # Build markdown manually from dict
             lines = [
                 f"# {topic}\n",
@@ -1370,6 +1438,7 @@ async def export_research(session_id: str, format_type: str):
                 "mime_type": "text/markdown",
             }
         elif format_type == "html":
+            export_requests_total.labels(format="html").inc()
             # Build HTML manually from dict
             html_parts = [
                 "<!DOCTYPE html>",

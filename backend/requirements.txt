@@ -12,4 +12,6 @@ python-jose[cryptography]==3.5.0
 python-multipart==0.0.32
 apscheduler>=3.10.4
 pypdf>=4.0.0
+reportlab>=4.2.0
+prometheus_client>=0.21.0
 # deploy: scheduled-research v4.0.0
