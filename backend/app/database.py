@@ -752,15 +752,20 @@ def _normalize_topic(topic: str) -> str:
     return topic.lower().strip()
 
 
+_CACHE_TTL_DAYS = 7
+
+
 async def get_cached_research(topic: str) -> Optional[dict]:
-    """Get cached research report if available"""
+    """Get cached research report if available and not older than _CACHE_TTL_DAYS."""
     try:
         pool = await get_pool()
         topic_normalized = _normalize_topic(topic)
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT report FROM research_cache WHERE topic_normalized=$1",
+                "SELECT report FROM research_cache WHERE topic_normalized=$1"
+                " AND cached_at > NOW() - ($2 || ' days')::INTERVAL",
                 topic_normalized,
+                str(_CACHE_TTL_DAYS),
             )
             if row and row["report"]:
                 report = row["report"]
@@ -1725,6 +1730,17 @@ async def get_documents_text(doc_ids: list[str], user_id: str) -> list[dict]:
             doc_ids, user_id,
         )
         return [dict(r) for r in rows]
+
+
+async def count_user_documents(user_id: str) -> int:
+    """Return the number of documents currently uploaded by this user."""
+    pool = await get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT COUNT(*) FROM uploaded_documents WHERE user_id=$1", user_id
+        ) or 0
 
 
 async def delete_document(doc_id: str, user_id: str) -> bool:

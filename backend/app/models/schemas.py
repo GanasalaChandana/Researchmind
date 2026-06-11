@@ -1,13 +1,26 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
 
 class ResearchRequest(BaseModel):
-    topic: str
-    depth: int = 3  # number of sub-questions to explore
-    custom_prompts: Optional[list[str]] = None  # optional custom research questions
+    topic: str = Field(..., min_length=1, max_length=500)
+    depth: int = Field(default=3, ge=1, le=10)
+    custom_prompts: Optional[list[str]] = Field(default=None, max_length=20)
+
+    @field_validator("topic")
+    @classmethod
+    def topic_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("topic cannot be blank")
+        return v.strip()
+
+
+class WebhookRequest(BaseModel):
+    url: str = Field(..., max_length=2000)
+    events: list[str] = Field(default=["completed", "failed"], max_length=10)
+    secret: Optional[str] = Field(default=None, max_length=200)
 
 
 class AgentEvent(BaseModel):
@@ -73,12 +86,6 @@ class ResearchSession(BaseModel):
     status: str  # "running" | "completed" | "failed"
     created_at: str
     report: Optional[ResearchReport] = None
-
-
-class WebhookRequest(BaseModel):
-    url: str
-    events: list[str] = ["completed", "failed"]
-    secret: Optional[str] = None
 
 
 class FavoriteRequest(BaseModel):

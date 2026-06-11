@@ -1,4 +1,9 @@
+import asyncio as _asyncio
+
+
 def friendly_error(e: Exception) -> str:
+    if isinstance(e, _asyncio.TimeoutError):
+        return "⏱️ Research pipeline timed out (>120s per phase). The AI provider may be overloaded — please try again."
     msg = str(e).lower()
     if "rate limit" in msg or "429" in msg or "ratelimit" in msg:
         return "⏳ Rate limit reached on the AI provider. Please wait 30 seconds and try again."

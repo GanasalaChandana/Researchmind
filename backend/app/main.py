@@ -37,7 +37,7 @@ from .database import (
     create_schedule_db, list_schedules_db, get_schedule_db,
     update_schedule_run, toggle_schedule_active,
     delete_schedule_db, get_all_active_schedules,
-    save_document, get_documents_text, delete_document,
+    save_document, get_documents_text, delete_document, count_user_documents,
     add_comment, get_comments, delete_comment,
 )
 from .tools.error_handler import friendly_error
@@ -604,8 +604,14 @@ async def health():
 # ---------------------------------------------------------------------------
 
 @app.get("/research/{session_id}/comments")
-async def list_comments(session_id: str):
-    return {"comments": await get_comments(session_id)}
+async def list_comments(
+    session_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    all_comments = await get_comments(session_id)
+    page = all_comments[offset: offset + limit]
+    return {"comments": page, "total": len(all_comments), "offset": offset, "limit": limit}
 
 
 class _CommentCreate(_PydanticBase):
@@ -675,7 +681,8 @@ def _extract_text(filename: str, data: bytes) -> str:
 
 
 ALLOWED_TYPES = {".pdf", ".txt", ".md", ".csv"}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB per file
+MAX_DOCS_PER_USER = 50             # total documents stored per user
 
 
 @app.post("/documents/upload")
@@ -683,6 +690,16 @@ async def upload_documents(
     files: list[UploadFile] = File(...),
     current_user=Depends(get_current_user),
 ):
+    if len(files) > 10:
+        raise HTTPException(status_code=422, detail="Maximum 10 files per upload request")
+
+    existing = await count_user_documents(current_user["id"])
+    if existing + len(files) > MAX_DOCS_PER_USER:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Document limit reached ({MAX_DOCS_PER_USER} max). Delete some before uploading more.",
+        )
+
     results = []
     for file in files:
         suffix = "." + (file.filename or "").rsplit(".", 1)[-1].lower()
@@ -1156,9 +1173,41 @@ async def stream_research(
                 parsed_ids = [d.strip() for d in doc_ids.split(",") if d.strip()]
                 doc_contexts = await get_documents_text(parsed_ids, _user_id_for_docs)
 
+            _PHASE_TIMEOUT = 120  # seconds per agent phase before giving up
+
+            async def _collect_orchestrate():
+                results = []
+                async for event in orchestrate(topic, depth, language=lang):
+                    results.append(event)
+                return results
+
+            async def _collect_search(questions):
+                results = []
+                async for event, sources in search(questions):
+                    results.append((event, sources))
+                return results
+
+            async def _collect_read(sources):
+                results = []
+                async for event, source in read_sources(sources, language=lang):
+                    results.append((event, source))
+                return results
+
+            async def _collect_synthesize(enriched, questions, doc_ctx):
+                results = []
+                async for event, report in synthesize(
+                    topic, session_id, enriched, questions,
+                    language=lang, doc_contexts=doc_ctx or None, model_tier=model_tier,
+                ):
+                    results.append((event, report))
+                return results
+
             # Phase 1: Orchestrator (skip if custom prompts provided)
             if not sub_questions:
-                async for event in orchestrate(topic, depth, language=lang):
+                orch_events = await asyncio.wait_for(
+                    _collect_orchestrate(), timeout=_PHASE_TIMEOUT
+                )
+                for event in orch_events:
                     if event.data and "sub_questions" in event.data:
                         sub_questions = event.data["sub_questions"]
                     yield {"data": event.model_dump_json()}
@@ -1168,7 +1217,10 @@ async def stream_research(
                 sub_questions = [topic]
 
             # Phase 2: Search
-            async for event, sources in search(sub_questions):
+            search_results = await asyncio.wait_for(
+                _collect_search(sub_questions), timeout=_PHASE_TIMEOUT
+            )
+            for event, sources in search_results:
                 all_sources.extend(sources)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
@@ -1176,13 +1228,20 @@ async def stream_research(
             # Phase 3: Read sources (top 6 by relevance)
             top_sources = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
             enriched_sources = []
-            async for event, source in read_sources(top_sources, language=lang):
+            read_results = await asyncio.wait_for(
+                _collect_read(top_sources), timeout=_PHASE_TIMEOUT
+            )
+            for event, source in read_results:
                 enriched_sources.append(source)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 
             # Phase 4: Synthesize
-            async for event, report in synthesize(topic, session_id, enriched_sources, sub_questions, language=lang, doc_contexts=doc_contexts or None, model_tier=model_tier):
+            synth_results = await asyncio.wait_for(
+                _collect_synthesize(enriched_sources, sub_questions, doc_contexts),
+                timeout=_PHASE_TIMEOUT,
+            )
+            for event, report in synth_results:
                 if report:
                     # Deduplicate sources by title before saving (final safety check)
                     seen_titles = set()

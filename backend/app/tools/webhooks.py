@@ -13,7 +13,7 @@ import httpx
 _webhooks: dict[str, list[dict]] = {}
 
 MAX_RETRIES = 3
-RETRY_DELAYS = [5, 30, 120]  # seconds between retry attempts
+RETRY_DELAYS = [2, 8, 32]  # exponential backoff: 2s → 8s → 32s
 
 
 def _sign_payload(payload: str, secret: str) -> str:
