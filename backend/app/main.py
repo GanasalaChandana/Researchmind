@@ -6,12 +6,9 @@ import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from .config import GROQ_API_KEY  # noqa: F401 — triggers dotenv load at startup
+from .tools.json_logging import configure_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
+configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 from groq import Groq as _GroqClient
@@ -668,8 +665,19 @@ async def health():
             db_ok = True
     except Exception:
         db_ok = False
+    from .tools.circuit_breaker import groq_breaker, tavily_breaker
     status = "ok" if db_ok else "degraded"
-    payload = {"status": status, "checks": {"db": db_ok, "db_configured": db_url_set}}
+    payload = {
+        "status": status,
+        "checks": {
+            "db": db_ok,
+            "db_configured": db_url_set,
+            "circuit_breakers": {
+                "groq": groq_breaker.state,
+                "tavily": tavily_breaker.state,
+            },
+        },
+    }
     return _JSONResponse(payload, status_code=200 if db_ok else 503)
 
 

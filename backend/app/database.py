@@ -748,8 +748,9 @@ async def delete_session(session_id: str):
 
 
 def _normalize_topic(topic: str) -> str:
-    """Normalize topic for cache lookup (lowercase, remove extra spaces)"""
-    return topic.lower().strip()
+    """Normalize topic for cache lookup using full semantic normalisation."""
+    from .tools.topic_normalizer import normalize_topic
+    return normalize_topic(topic)
 
 
 _CACHE_TTL_DAYS = 7
