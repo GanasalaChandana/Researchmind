@@ -34,6 +34,75 @@ const EXAMPLE_TOPICS = [
   "History and evolution of the internet",
 ];
 
+const RESEARCH_TEMPLATES = [
+  {
+    category: "Literature Review",
+    icon: "📚",
+    color: "text-brand-400",
+    bg: "bg-brand-500/10 border-brand-500/20",
+    topics: [
+      "Literature review: transformer architectures in NLP",
+      "Literature review: CRISPR gene editing applications",
+      "Literature review: renewable energy storage technologies",
+    ],
+  },
+  {
+    category: "Market Analysis",
+    icon: "📈",
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/20",
+    topics: [
+      "Market analysis: global electric vehicle industry 2025",
+      "Market analysis: AI SaaS competitive landscape",
+      "Market analysis: quantum computing commercial adoption",
+    ],
+  },
+  {
+    category: "Technology Deep Dive",
+    icon: "⚙️",
+    color: "text-violet-400",
+    bg: "bg-violet-500/10 border-violet-500/20",
+    topics: [
+      "How does retrieval-augmented generation (RAG) work?",
+      "Technical deep dive: Kubernetes architecture and scaling",
+      "How do diffusion models generate images?",
+    ],
+  },
+  {
+    category: "Competitor Research",
+    icon: "🔍",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10 border-amber-500/20",
+    topics: [
+      "Competitor analysis: OpenAI vs Anthropic vs Google Gemini",
+      "Competitor analysis: Notion vs Obsidian vs Roam Research",
+      "Competitor analysis: AWS vs Azure vs Google Cloud 2025",
+    ],
+  },
+  {
+    category: "Policy & Society",
+    icon: "🏛️",
+    color: "text-rose-400",
+    bg: "bg-rose-500/10 border-rose-500/20",
+    topics: [
+      "AI regulation policies across EU, US, and China",
+      "Impact of remote work on urban planning and real estate",
+      "Universal basic income: evidence from global pilot programs",
+    ],
+  },
+  {
+    category: "Science & Health",
+    icon: "🧬",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10 border-cyan-500/20",
+    topics: [
+      "Microbiome research: gut-brain axis and mental health",
+      "mRNA vaccine technology: beyond COVID-19 applications",
+      "Longevity research: current science on aging reversal",
+    ],
+  },
+];
+
 const ROTATING_WORDS = [
   { word: "searches", color: "text-brand-400" },
   { word: "reads",    color: "text-violet-400" },
@@ -116,6 +185,8 @@ export default function HomePage() {
   const { user, signOut, isAuthenticated } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [activeTemplateCategory, setActiveTemplateCategory] = useState(RESEARCH_TEMPLATES[0].category);
 
   // Rotating tagline word
   useEffect(() => {
@@ -765,6 +836,74 @@ export default function HomePage() {
             <GitCompare className="w-3.5 h-3.5" />
             {t.compareDepths}
           </button>
+        </div>
+
+        {/* ── Research Templates ── */}
+        <div className="mt-5">
+          <button
+            onClick={() => setShowTemplates(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 glass rounded-xl border dark:border-white/8 border-slate-200 hover:border-brand-500/30 transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🗂️</span>
+              <span className="text-sm font-medium dark:text-slate-300 text-slate-700">Research Templates</span>
+              <span className="text-xs dark:text-slate-500 text-slate-400 hidden sm:inline">— start from a proven framework</span>
+            </div>
+            <motion.div animate={{ rotate: showTemplates ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronRight className="w-4 h-4 dark:text-slate-500 text-slate-400 rotate-90" />
+            </motion.div>
+          </button>
+
+          <AnimatePresence>
+            {showTemplates && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 glass rounded-xl border dark:border-white/8 border-slate-200 overflow-hidden">
+                  {/* Category tabs */}
+                  <div className="flex overflow-x-auto scrollbar-hide border-b dark:border-white/8 border-slate-200 px-2 pt-2 gap-1">
+                    {RESEARCH_TEMPLATES.map(tmpl => (
+                      <button
+                        key={tmpl.category}
+                        onClick={() => setActiveTemplateCategory(tmpl.category)}
+                        className={`shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-t-lg font-medium transition-all border-b-2 ${
+                          activeTemplateCategory === tmpl.category
+                            ? `${tmpl.color} border-current dark:bg-white/5 bg-slate-50`
+                            : "dark:text-slate-500 text-slate-400 border-transparent hover:dark:text-slate-300 hover:text-slate-600"
+                        }`}
+                      >
+                        <span>{tmpl.icon}</span>
+                        <span className="hidden sm:inline">{tmpl.category}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Template topics */}
+                  <div className="p-3 space-y-2">
+                    {RESEARCH_TEMPLATES.find(t => t.category === activeTemplateCategory)?.topics.map(topic => (
+                      <motion.button
+                        key={topic}
+                        whileHover={{ x: 4 }}
+                        onClick={() => {
+                          setTopic(topic);
+                          setShowTemplates(false);
+                          inputRef.current?.focus();
+                        }}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left dark:hover:bg-white/5 hover:bg-slate-50 transition-colors group/item border border-transparent hover:border-brand-500/20"
+                      >
+                        <span className="text-sm dark:text-slate-300 text-slate-700 leading-snug">{topic}</span>
+                        <ChevronRight className="w-3.5 h-3.5 dark:text-slate-600 text-slate-400 group-hover/item:text-brand-400 shrink-0 transition-colors" />
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Examples */}
