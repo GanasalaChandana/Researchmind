@@ -1077,6 +1077,41 @@ async def remove_document(doc_id: str, current_user=Depends(get_current_user)):
     return {"ok": True}
 
 
+@app.get("/research/suggest")
+async def suggest_queries(q: str = Query(default="", max_length=200)):
+    """Return 4 AI-generated query refinements/expansions for a partial topic."""
+    if not q.strip() or len(q.strip()) < 3:
+        return {"suggestions": []}
+    prompt = (
+        f'A user is about to search for research on: "{q.strip()}"\n\n'
+        "Generate exactly 4 specific, interesting research query variations or expansions. "
+        "Each should be a complete research question or topic (5-15 words). "
+        "Make them diverse: one broad, one narrow, one comparative, one future-focused.\n"
+        'Reply ONLY with a JSON array of 4 strings: ["query 1", "query 2", "query 3", "query 4"]'
+    )
+    def _call() -> list[str]:
+        import json as _j
+        client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+            temperature=0.7,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        return [str(s).strip() for s in _j.loads(raw) if str(s).strip()][:4]
+    try:
+        loop = asyncio.get_event_loop()
+        suggestions = await loop.run_in_executor(None, _call)
+        return {"suggestions": suggestions}
+    except Exception:
+        return {"suggestions": []}
+
+
 @app.post("/research/start")
 async def start_research(
     http_request: Request,

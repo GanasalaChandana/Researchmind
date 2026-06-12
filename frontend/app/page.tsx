@@ -197,6 +197,8 @@ export default function HomePage() {
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [trendingTopics, setTrendingTopics] = useState<{ topic: string; count: number }[]>([]);
   const [modelTier, setModelTier] = useState<"fast" | "balanced" | "deep">("balanced");
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
 
   // Rotating tagline word
   useEffect(() => {
@@ -337,6 +339,22 @@ export default function HomePage() {
     setSuggestions(matches);
     setShowSuggestions(matches.length > 0);
   }, [topic, sessions]);
+
+  // AI query suggestions (debounced, fires 600ms after typing stops)
+  useEffect(() => {
+    const trimmed = topic.trim();
+    if (trimmed.length < 4) { setAiSuggestions([]); return; }
+    setAiSuggestLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/research/suggest?q=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        setAiSuggestions(data.suggestions ?? []);
+      } catch { setAiSuggestions([]); }
+      finally { setAiSuggestLoading(false); }
+    }, 600);
+    return () => { clearTimeout(timer); setAiSuggestLoading(false); };
+  }, [topic]);
 
   // Sort the sessions (already filtered/paginated by backend)
   const filteredSessions = useMemo(() => {
@@ -891,25 +909,48 @@ export default function HomePage() {
             />
             {/* Suggestions dropdown */}
             <AnimatePresence>
-              {showSuggestions && (
+              {(showSuggestions || aiSuggestions.length > 0 || aiSuggestLoading) && topic.trim().length >= 2 && (
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   className="absolute top-full left-0 right-0 mt-1 glass rounded-xl overflow-hidden z-20 border border-brand-500/20"
                 >
-                  <p className="text-xs text-slate-500 px-4 pt-3 pb-1">From your history</p>
-                  {suggestions.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => { setTopic(s); setShowSuggestions(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-brand-500/10 hover:text-white transition-colors flex items-center gap-2"
-                    >
-                      <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      {s}
-                    </button>
-                  ))}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <>
+                      <p className="text-xs text-slate-500 px-4 pt-3 pb-1">From your history</p>
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => { setTopic(s); setShowSuggestions(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-brand-500/10 hover:text-white transition-colors flex items-center gap-2"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          {s}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {(aiSuggestions.length > 0 || aiSuggestLoading) && (
+                    <>
+                      <p className="text-xs text-slate-500 px-4 pt-3 pb-1 flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-brand-400" /> AI suggestions
+                        {aiSuggestLoading && <span className="ml-1 w-3 h-3 border border-brand-400/50 border-t-brand-400 rounded-full animate-spin inline-block" />}
+                      </p>
+                      {aiSuggestions.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => { setTopic(s); setAiSuggestions([]); setShowSuggestions(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm dark:text-slate-200 text-slate-700 hover:bg-brand-500/10 hover:text-brand-400 transition-colors flex items-center gap-2"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                          {s}
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
