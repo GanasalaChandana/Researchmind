@@ -90,14 +90,14 @@ button { min-height: 36px; }
 /* ─── Hero background grid ─── */
 .hero-grid {
   background-image:
-    linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px);
+    linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 :root:not(.dark) .hero-grid {
   background-image:
-    linear-gradient(rgba(99,102,241,0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99,102,241,0.08) 1px, transparent 1px);
+    linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
 }
 
 /* (glow orbs handled by fixed background div in page.tsx) */

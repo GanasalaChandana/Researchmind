@@ -569,12 +569,9 @@ export default function HomePage() {
 
       {/* ── Animated background ── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        {/* Dot grid texture */}
-        <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
-        {/* Gradient orbs */}
-        <div className="absolute -top-60 -right-60 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute -bottom-60 -left-60 w-[600px] h-[600px] bg-violet-500/8 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s", animationDuration: "4s" }} />
-        <div className="absolute top-1/3 left-1/4 w-72 h-72 bg-brand-400/6 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "3s", animationDuration: "5s" }} />
+        {/* Gradient orbs — dark mode only */}
+        <div className="absolute -top-60 -right-60 w-[500px] h-[500px] dark:bg-brand-500/10 bg-brand-400/5 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-60 -left-60 w-[600px] h-[600px] dark:bg-violet-500/8 bg-violet-400/4 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s", animationDuration: "4s" }} />
       </div>
 
       {/* Top bar: Auth + Theme — fixed so it stays visible on scroll */}
@@ -833,25 +830,32 @@ export default function HomePage() {
             {t.badgePowered}
           </motion.div>
 
-          {/* Logo + Title row */}
+          {/* Logo */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08, type: "spring", stiffness: 120, damping: 16 }}
-            className="flex items-center justify-center gap-4 mb-4"
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.05, type: "spring", stiffness: 200, damping: 14 }}
+            className="flex justify-center mb-5"
           >
-            <div className="relative shrink-0">
-              <div className="absolute inset-0 rounded-2xl bg-brand-500/40 blur-xl scale-150" />
-              <div className="relative inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-brand-500 via-brand-400 to-violet-500 shadow-xl shadow-brand-500/40">
-                <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+            <div className="relative">
+              <div className="absolute inset-0 rounded-2xl dark:bg-brand-500/40 bg-brand-400/20 blur-xl scale-150" />
+              <div className="relative inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 via-brand-400 to-violet-500 shadow-xl shadow-brand-500/30">
+                <Sparkles className="w-8 h-8 text-white" />
               </div>
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-none">
-              <span className="bg-gradient-to-r from-indigo-400 via-brand-300 to-violet-400 bg-clip-text text-transparent dark:from-indigo-300 dark:via-white dark:to-violet-300">
-                ResearchMind
-              </span>
-            </h1>
           </motion.div>
+
+          {/* Title */}
+          <motion.h1
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="text-5xl sm:text-6xl font-black tracking-tight mb-3 leading-none"
+          >
+            <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-300 dark:via-violet-200 dark:to-purple-300 bg-clip-text text-transparent">
+              ResearchMind
+            </span>
+          </motion.h1>
 
           {/* Tagline with rotating word */}
           <motion.div
