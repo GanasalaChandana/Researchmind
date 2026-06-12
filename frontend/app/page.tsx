@@ -356,10 +356,12 @@ export default function HomePage() {
     return () => { clearTimeout(timer); setAiSuggestLoading(false); };
   }, [topic]);
 
-  // Sort the sessions (already filtered/paginated by backend)
+  // Sort the sessions — pinned/favorites always float to top
   const filteredSessions = useMemo(() => {
     let result = [...sessions];
     result.sort((a, b) => {
+      if (a.is_favorite && !b.is_favorite) return -1;
+      if (!a.is_favorite && b.is_favorite) return 1;
       const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       return sortOrder === "newest" ? -diff : diff;
     });
@@ -1676,6 +1678,12 @@ export default function HomePage() {
                         )}
 
                         <div className={`py-4 pr-24 transition-all duration-200 ${selectMode ? "pl-11" : "pl-5"}`}>
+                          {/* Pinned badge */}
+                          {s.is_favorite && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full mb-1.5">
+                              📌 Pinned
+                            </span>
+                          )}
                           {/* Topic */}
                           <h3 className="text-sm font-semibold dark:text-slate-100 text-slate-800 leading-snug mb-2 line-clamp-2 group-hover:dark:text-white transition-colors">
                             {s.topic}
