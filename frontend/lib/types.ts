@@ -55,6 +55,7 @@ export interface ResearchReport {
   sources: Source[];
   knowledge_graph: KnowledgeGraph;
   created_at: string;
+  key_takeaways?: string[];
 }
 
 export interface SessionTag {

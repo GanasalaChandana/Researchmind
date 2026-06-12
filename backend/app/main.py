@@ -306,6 +306,7 @@ async def _update(session_id: str, status: str, report=None):
         _user_id = sess.get("user_id")
         topic = sess.get("topic", "")
         _bg_task(_auto_tag_session(session_id, topic, report_dict, _user_id))
+        _bg_task(_extract_key_takeaways(session_id, topic, report_dict))
 
 
 async def _get(session_id: str):
@@ -382,6 +383,57 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
         logger.info("Auto-tagged session %s: %s", session_id[:8], tags)
     except Exception as e:
         logger.warning("Auto-tagging failed for %s: %s", session_id[:8], e)
+
+
+# ─── Key takeaways extraction ────────────────────────────────────────────────
+
+async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict) -> None:
+    """Use Groq to extract 3-5 key takeaways and patch them into the stored report."""
+    summary = (report_dict.get("summary") or "")[:800]
+    sections = report_dict.get("sections") or []
+    section_text = "\n".join(
+        f"{s.get('heading','')}: {s.get('content','')[:300]}"
+        for s in sections[:5]
+    )
+    prompt = (
+        f"You are a research analyst. Extract exactly 3 to 5 key takeaways from the research report below.\n"
+        f"Each takeaway must be a single clear sentence (max 25 words) capturing an important finding or insight.\n"
+        f"Reply ONLY with a JSON array of strings, e.g. [\"Finding one.\", \"Finding two.\"]\n\n"
+        f"Topic: {topic}\nSummary: {summary}\nSections:\n{section_text}"
+    )
+
+    def _call() -> list[str]:
+        import json as _j
+        client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+            temperature=0.3,
+        )
+        raw = resp.choices[0].message.content.strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = _j.loads(raw)
+        return [str(t).strip() for t in parsed if str(t).strip()][:5]
+
+    try:
+        loop = asyncio.get_event_loop()
+        takeaways = await loop.run_in_executor(None, _call)
+        if not takeaways:
+            return
+        # Patch key_takeaways into the stored session report
+        session = await _get(session_id)
+        if session and session.get("report"):
+            stored = session["report"] if isinstance(session["report"], dict) else json.loads(session["report"])
+            stored["key_takeaways"] = takeaways
+            await _update(session_id, "completed", stored)
+        logger.info("Key takeaways extracted for %s: %d items", session_id[:8], len(takeaways))
+    except Exception as e:
+        logger.warning("Key takeaways failed for %s: %s", session_id[:8], e)
 
 
 # ─── Cross-session KG entity extraction ─────────────────────────────────────
@@ -535,6 +587,7 @@ async def _run_pipeline_bg(
             await cache_research(topic, report_dict)
             _bg_task(_auto_tag_session(session_id, topic, report_dict, user_id))
             _bg_task(_extract_entities_to_graph(session_id, report_dict, user_id))
+            _bg_task(_extract_key_takeaways(session_id, topic, report_dict))
             if notify_email:
                 _bg_task(_send_schedule_ready_email(user_id, topic, session_id))
             logger.info("Scheduled pipeline done: %s — %s", session_id[:8], topic[:40])
@@ -1710,6 +1763,9 @@ async def stream_research(
 
                     # 🕸️ KG extraction: store entities into cross-session graph tables
                     _bg_task(_extract_entities_to_graph(session_id, report_dict, _user_id))
+
+                    # 💡 Key takeaways: extract 3-5 findings in the background
+                    _bg_task(_extract_key_takeaways(session_id, topic, report_dict))
 
                     # 🔔 Fire webhook: research completed
                     _bg_task(fire_webhook_event(

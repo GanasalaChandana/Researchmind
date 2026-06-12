@@ -338,6 +338,25 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
         );
       })()}
 
+      {/* Key Takeaways */}
+      {report.key_takeaways && report.key_takeaways.length > 0 && (
+        <div className="glass rounded-xl p-6 border-l-4 border-emerald-500">
+          <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-3 flex items-center gap-2">
+            <span>💡</span> Key Takeaways
+          </h2>
+          <ul className="space-y-2">
+            {report.key_takeaways.map((point, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  {i + 1}
+                </span>
+                <span className="dark:text-slate-300 text-slate-700 text-sm leading-relaxed">{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="glass rounded-xl p-6 border-l-4 border-brand-500">
         <h2 className="text-lg font-semibold dark:text-white text-slate-900 mb-2">{t.executiveSummary}</h2>
