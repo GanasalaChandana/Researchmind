@@ -11,6 +11,22 @@ from .tools.json_logging import configure_logging
 configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
+# Sentry — initialise before anything else so all errors are captured
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
+
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FastApiIntegration(), AsyncioIntegration()],
+        traces_sample_rate=0.05,
+        environment=os.environ.get("ENVIRONMENT", "production"),
+        send_default_pii=False,
+    )
+    logger.info("Sentry initialised (environment=%s)", os.environ.get("ENVIRONMENT", "production"))
+
 from groq import Groq as _GroqClient
 
 from fastapi import FastAPI, HTTPException, Depends, Query, Body, Request, UploadFile, File
@@ -65,6 +81,7 @@ from .database import (
 from .auth.user_db import init_user_tables
 from .routes.auth import router as auth_router
 from .routes.public_api import router as public_api_router
+from .routes.oauth import router as oauth_router
 from .auth.dependencies import get_optional_user, get_current_user
 
 
@@ -138,8 +155,10 @@ app = FastAPI(
 
 # Mount routers — auth and public API available under both root and /v1
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(public_api_router)
 app.include_router(auth_router, prefix="/v1")
+app.include_router(oauth_router, prefix="/v1")
 app.include_router(public_api_router, prefix="/v1")
 
 # CORS — restrict to known frontend origins. Auth uses bearer tokens (not cookies),

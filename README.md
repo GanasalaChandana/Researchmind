@@ -17,14 +17,20 @@
 | 📡 Live streaming | Watch every agent reasoning step in real-time via SSE |
 | 🕸️ Knowledge Graph | Interactive D3 force graph per report + cross-session entity linking |
 | 🔍 Full-text search | Search across all report bodies, not just titles |
-| 🏷️ Auto-tagging | LLM generates 3–5 topic tags automatically after research completes |
+| 🏷️ Auto-tagging | Tags generated automatically from topic bigrams, KG entities, and section headings |
 | 📁 Collections | Organize sessions into color-coded folders |
 | 📊 Dashboard | Usage analytics — sessions by date, top topics, most-researched concepts |
 | 🔗 Share links | Token-based public share links with 30-day expiry |
-| ↔️ Compare | Side-by-side comparison of two sessions with source overlap analysis |
+| ↔️ Compare | Side-by-side diff of two sessions with similarity score and contradiction detection |
+| 🔁 Refresh | Re-run research on a completed session; version history preserved |
+| 🗓️ Scheduling | Cron-based recurring research with email notifications |
+| ☑️ Bulk operations | Multi-select sessions for bulk delete or bulk tag |
 | 📤 Export | Markdown, HTML, PDF, DOCX export |
 | 🔑 Public API | REST API with per-key rate limiting (100 req/hr) |
 | 🔔 Webhooks | Fire events to your endpoint on research completion |
+| 🔐 OAuth | Sign in with Google or GitHub — no password required |
+| ⚡ Redis caching | L1 Redis + L2 Postgres caching; completed sessions served in milliseconds |
+| 🛡️ Sentry | Error tracking on both frontend and backend |
 
 ---
 
@@ -75,10 +81,14 @@ User Input
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, Framer Motion |
 | Streaming | Server-Sent Events (SSE) proxied through Next.js |
 | Graph viz | react-force-graph-2d (D3 canvas) |
-| Backend | Python FastAPI, asyncio |
+| Backend | Python FastAPI, asyncio, APScheduler |
 | LLM | Groq API — Llama 3.3 70B |
-| Database | PostgreSQL on Railway (asyncpg) |
-| Auth | JWT (access + refresh tokens) |
+| Search | Tavily Search API |
+| Database | Supabase PostgreSQL (asyncpg) + Alembic migrations |
+| Cache | Upstash Redis (L1) + Postgres (L2) |
+| Auth | JWT (access + refresh tokens) + Google/GitHub OAuth |
+| Email | Resend (password resets, schedule notifications) |
+| Monitoring | Sentry (frontend + backend) |
 | Deploy | Vercel (frontend) + Railway (backend) |
 
 ---
@@ -103,8 +113,20 @@ pip install -r requirements.txt
 Create `backend/.env`:
 ```env
 GROQ_API_KEY=your_groq_key_here
+TAVILY_API_KEY=your_tavily_key_here
 DATABASE_URL=postgresql://user:pass@localhost:5432/researchmind
-SECRET_KEY=any-random-string-for-jwt
+JWT_SECRET_KEY=any-random-string-min-32-chars
+FRONTEND_URL=http://localhost:3000
+BACKEND_URL=http://localhost:8000
+
+# Optional
+REDIS_URL=rediss://...             # Upstash Redis
+RESEND_API_KEY=re_...              # Email notifications
+SENTRY_DSN=https://...             # Error tracking
+GOOGLE_CLIENT_ID=...               # Google OAuth
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...               # GitHub OAuth
+GITHUB_CLIENT_SECRET=...
 ```
 
 ```bash
@@ -121,6 +143,7 @@ npm install
 Create `frontend/.env.local`:
 ```env
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+NEXT_PUBLIC_SENTRY_DSN=https://...    # optional
 ```
 
 ```bash
@@ -128,6 +151,23 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## OAuth Setup
+
+### Google
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create an **OAuth 2.0 Client ID** (Web application)
+3. Add authorized redirect URI: `https://YOUR-BACKEND.railway.app/auth/oauth/google/callback`
+4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in your backend environment
+
+### GitHub
+
+1. GitHub Settings → Developer settings → OAuth Apps → **New OAuth App**
+2. Set Authorization callback URL: `https://YOUR-BACKEND.railway.app/auth/oauth/github/callback`
+3. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in your backend environment
 
 ---
 
