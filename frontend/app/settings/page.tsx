@@ -269,7 +269,7 @@ function DangerZone({ onDeleted }: { onDeleted: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { user, setUser, logout } = useAuth();
+  const { user, setUser, signOut } = useAuth();
   const router = useRouter();
 
   if (!user) {
@@ -284,7 +284,7 @@ export default function SettingsPage() {
     (user as any).provider !== undefined;
 
   function handleDeleted() {
-    logout();
+    signOut();
     router.replace("/");
   }
 
