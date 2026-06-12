@@ -26,7 +26,7 @@ import AuthModal from "@/components/AuthModal";
 import OnboardingModal from "@/components/OnboardingModal";
 import { useAuth } from "@/context/AuthContext";
 import { logout } from "@/lib/auth";
-import { LogIn, LogOut, UserCircle2, Globe } from "lucide-react";
+import { LogIn, LogOut, UserCircle2, Globe, Settings } from "lucide-react";
 import { useLanguage, LANGUAGES } from "@/context/LanguageContext";
 
 const EXAMPLE_TOPICS = [
@@ -566,6 +566,16 @@ export default function HomePage() {
               <UserCircle2 className="w-4 h-4" />
               {user?.name}
             </span>
+            <button
+              onClick={() => router.push("/settings")}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                         dark:text-slate-400 text-slate-600 hover:text-brand-400
+                         dark:hover:bg-white/5 hover:bg-slate-100 transition-colors"
+              title="Account settings"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
             <button
               onClick={() => { logout(localStorage.getItem("rm_refresh_token") ?? ""); signOut(); }}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
