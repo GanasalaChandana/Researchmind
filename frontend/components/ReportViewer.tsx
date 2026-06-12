@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { ResearchReport } from "@/lib/types";
 import {
   ExternalLink, Download, Loader2, Share2,
-  FileText, Copy, Check, BookOpen, ChevronDown,
+  FileText, Copy, Check, BookOpen, ChevronDown, Clock,
   ShieldCheck, ShieldAlert, ShieldX, FlaskConical,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -71,6 +71,15 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
     }
     return { uniqueSources: unique, indexMap };
   }, [report.sources]);
+
+  const readingTime = useMemo(() => {
+    const words = [
+      report.summary,
+      ...report.sections.map(s => s.content),
+    ].join(" ").split(/\s+/).filter(Boolean).length;
+    const mins = Math.max(1, Math.round(words / 200));
+    return `${mins} min read`;
+  }, [report.summary, report.sections]);
 
   // Build citations purely client-side — no backend call needed
   const citations = useMemo(() => {
@@ -192,7 +201,12 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
       {/* Header: title + share */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h1 className="text-lg sm:text-xl font-bold dark:text-white text-slate-900">{report.topic}</h1>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-lg sm:text-xl font-bold dark:text-white text-slate-900">{report.topic}</h1>
+            <span className="flex items-center gap-1 text-xs dark:text-slate-500 text-slate-400">
+              <Clock className="w-3 h-3" />{readingTime}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             {/* Fact-check toggle */}
             <button
