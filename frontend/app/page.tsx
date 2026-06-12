@@ -15,7 +15,7 @@ import {
   Trash2, RefreshCw, MoreHorizontal, GitCompare,
   SortAsc, SortDesc, Calendar, Tag, X, Star, BarChart3, Code2, CalendarClock, Webhook, Link2,
   FolderOpen, Plus, Check, FolderPlus, Brain, Network, FileText, Zap,
-  Square, CheckSquare, Tags,
+  Square, CheckSquare, Tags, Menu, X as XIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -150,6 +150,7 @@ export default function HomePage() {
   const [topic, setTopic] = useState("");
   const [depth, setDepth] = useState(3);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [historySearch, setHistorySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "failed">("all");
@@ -199,6 +200,7 @@ export default function HomePage() {
   const [modelTier, setModelTier] = useState<"fast" | "balanced" | "deep">("balanced");
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Rotating tagline word
   useEffect(() => {
@@ -260,22 +262,21 @@ export default function HomePage() {
     if (selectedTag) params.set("tag", selectedTag);
     if (selectedCollection) params.set("collection", selectedCollection);
 
+    setHistoryLoading(true);
     fetch(`/api/research/sessions?${params}`, { headers })
       .then((r) => r.json())
       .then((data: any) => {
         if (token) {
-          // Authenticated: server already filtered to this user's sessions
           setSessions(data.items || []);
           setTotalSessions(data.total || 0);
         } else {
-          // Unauthenticated: filter by localStorage IDs
           const items = (data.items || []).filter((s: any) => localIds.includes(s.id));
           setSessions(items);
-          // For unauthenticated, show only local sessions count
           setTotalSessions(localIds.length);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
   }, [isAuthenticated, currentPage, itemsPerPage, statusFilter, favoritesOnly, historySearch, daysFilter, selectedTag, selectedCollection]);
 
   // Load user tags when authenticated
@@ -649,18 +650,44 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-            {/* Mobile: just icons */}
-            <div className="flex sm:hidden items-center gap-1">
-              {[
-                { icon: <BarChart3    className="w-4 h-4" />, path: "/dashboard",  title: "Dashboard" },
-                { icon: <CalendarClock className="w-4 h-4"/>, path: "/schedules",  title: "Schedules" },
-                { icon: <Link2        className="w-4 h-4" />, path: "/chains",     title: "Chains" },
-              ].map(nav => (
-                <button key={nav.path} onClick={() => router.push(nav.path)} title={nav.title}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
-                  {nav.icon}
-                </button>
-              ))}
+            {/* Mobile: hamburger menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowMobileMenu(v => !v)}
+                className="p-1.5 rounded-lg dark:text-slate-400 text-slate-600 dark:hover:bg-white/10 hover:bg-slate-100 transition-colors"
+                title="Menu"
+              >
+                {showMobileMenu ? <XIcon className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+              <AnimatePresence>
+                {showMobileMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl overflow-hidden shadow-xl border dark:border-white/10 border-slate-200 dark:bg-slate-900 bg-white py-1"
+                  >
+                    {[
+                      { icon: <BarChart3 className="w-4 h-4" />,     label: "Dashboard",  path: "/dashboard" },
+                      { icon: <Code2 className="w-4 h-4" />,         label: "API",        path: "/developer" },
+                      { icon: <CalendarClock className="w-4 h-4" />, label: "Schedules",  path: "/schedules" },
+                      { icon: <Webhook className="w-4 h-4" />,       label: "Webhooks",   path: "/webhooks" },
+                      { icon: <Link2 className="w-4 h-4" />,         label: "Chains",     path: "/chains" },
+                      { icon: <Settings className="w-4 h-4" />,      label: "Settings",   path: "/settings" },
+                    ].map(nav => (
+                      <button
+                        key={nav.path}
+                        onClick={() => { router.push(nav.path); setShowMobileMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm dark:text-slate-300 text-slate-700 dark:hover:bg-white/5 hover:bg-slate-50 transition-colors"
+                      >
+                        <span className="dark:text-slate-500 text-slate-400">{nav.icon}</span>
+                        {nav.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </>
         )}
@@ -1647,8 +1674,23 @@ export default function HomePage() {
 
             {/* Session list */}
             <div className="space-y-2">
+              {/* Loading skeleton */}
+              {historyLoading && sessions.length === 0 && (
+                <div className="space-y-2 animate-pulse">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="glass rounded-xl p-4 flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full dark:bg-white/10 bg-slate-200 shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3.5 dark:bg-white/10 bg-slate-200 rounded w-3/4" />
+                        <div className="h-2.5 dark:bg-white/5 bg-slate-100 rounded w-1/3" />
+                      </div>
+                      <div className="w-16 h-3 dark:bg-white/5 bg-slate-100 rounded" />
+                    </div>
+                  ))}
+                </div>
+              )}
               <AnimatePresence>
-                {filteredSessions.length === 0 ? (
+                {!historyLoading && filteredSessions.length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
