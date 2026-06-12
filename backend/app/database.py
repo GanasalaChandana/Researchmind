@@ -7,6 +7,7 @@ import hashlib
 import logging
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from .tools import cache as _cache
 
 logger = logging.getLogger(__name__)
 
@@ -681,15 +682,28 @@ async def update_session(session_id: str, status: str, report: Optional[dict] = 
                 "UPDATE sessions SET status=$1 WHERE id=$2",
                 status, session_id,
             )
+    # Invalidate cached session so next read reflects new status/report
+    await _cache.delete(_cache.session_key(session_id))
 
 
 async def get_session(session_id: str) -> Optional[dict]:
+    # Check Redis first — completed sessions are immutable and safe to cache
+    cached = await _cache.get(_cache.session_key(session_id))
+    if cached is not None:
+        return cached
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM sessions WHERE id=$1", session_id)
         if not row:
             return None
-        return _row_to_dict(row)
+        result = _row_to_dict(row)
+
+    # Only cache completed/failed sessions — running sessions change too often
+    if result.get("status") in ("completed", "failed"):
+        await _cache.set(_cache.session_key(session_id), result, ttl=300)
+
+    return result
 
 
 async def list_sessions(
@@ -745,6 +759,7 @@ async def delete_session(session_id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM sessions WHERE id=$1", session_id)
+    await _cache.delete(_cache.session_key(session_id))
 
 
 def _normalize_topic(topic: str) -> str:
@@ -759,8 +774,15 @@ _CACHE_TTL_DAYS = 7
 async def get_cached_research(topic: str) -> Optional[dict]:
     """Get cached research report if available and not older than _CACHE_TTL_DAYS."""
     try:
-        pool = await get_pool()
         topic_normalized = _normalize_topic(topic)
+
+        # L1: Redis (sub-millisecond)
+        redis_hit = await _cache.get(_cache.research_cache_key(topic_normalized))
+        if redis_hit is not None:
+            return redis_hit
+
+        # L2: Postgres research_cache table
+        pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT report FROM research_cache WHERE topic_normalized=$1"
@@ -772,17 +794,23 @@ async def get_cached_research(topic: str) -> Optional[dict]:
                 report = row["report"]
                 if isinstance(report, str):
                     report = json.loads(report)
+                # Promote to Redis so next hit skips DB entirely
+                await _cache.set(
+                    _cache.research_cache_key(topic_normalized),
+                    report,
+                    ttl=_CACHE_TTL_DAYS * 86400,
+                )
                 return report
     except Exception:
-        pass  # Cache miss or DB error, return None
+        pass
     return None
 
 
 async def cache_research(topic: str, report: dict):
-    """Cache a completed research report"""
+    """Cache a completed research report in both Postgres and Redis."""
     try:
-        pool = await get_pool()
         topic_normalized = _normalize_topic(topic)
+        pool = await get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO research_cache (topic_normalized, report)
@@ -792,8 +820,14 @@ async def cache_research(topic: str, report: dict):
                 topic_normalized,
                 json.dumps(report),
             )
+        # Mirror into Redis
+        await _cache.set(
+            _cache.research_cache_key(topic_normalized),
+            report,
+            ttl=_CACHE_TTL_DAYS * 86400,
+        )
     except Exception:
-        pass  # Cache write failure is not fatal
+        pass
 
 
 def _row_to_dict(row) -> dict:

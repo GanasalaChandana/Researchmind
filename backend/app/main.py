@@ -69,18 +69,44 @@ from .auth.dependencies import get_optional_user, get_current_user
 
 
 @asynccontextmanager
+async def _run_migrations() -> None:
+    """Run Alembic migrations in a thread pool (Alembic is synchronous)."""
+    import asyncio, os, pathlib
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        return
+    try:
+        from alembic.config import Config
+        from alembic import command
+
+        def _upgrade():
+            ini = pathlib.Path(__file__).parent.parent / "alembic.ini"
+            cfg = Config(str(ini))
+            # Override the script_location to an absolute path so it works
+            # regardless of the working directory at runtime.
+            migrations_dir = pathlib.Path(__file__).parent.parent / "migrations"
+            cfg.set_main_option("script_location", str(migrations_dir))
+            command.upgrade(cfg, "head")
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _upgrade)
+        logger.info("Database migrations applied (alembic head)")
+    except Exception as exc:
+        logger.warning("Alembic migration failed — falling back to init_db(): %s", exc)
+        # Graceful fallback: run the legacy DDL-based init
+        try:
+            await init_db()
+            await init_user_tables()
+        except Exception as e:
+            logger.warning("Legacy init_db also failed: %s", e)
+
+
 async def lifespan(app: FastAPI):
-    # Initialize DB tables on startup
+    # Run migrations / initialise DB tables
     try:
-        await init_db()
-        logger.info("Database initialized")
+        await _run_migrations()
     except Exception as e:
-        logger.warning("Database not available: %s — falling back to in-memory", e)
-    try:
-        await init_user_tables()
-        logger.info("User tables initialized")
-    except Exception as e:
-        logger.warning("User tables not available: %s — using in-memory fallback", e)
+        logger.warning("Startup DB init failed: %s — falling back to in-memory", e)
 
     # Start scheduler and register all active persisted schedules
     _scheduler.start()
