@@ -732,17 +732,22 @@ def _build_report_context(report: dict, max_chars: int = 8000) -> str:
 
 def _build_llm_messages(context: str, history: list[dict], topic: str) -> list[dict]:
     """Build the messages array for the Groq chat API."""
+    from datetime import date as _date
+    today = _date.today().strftime("%B %d, %Y")
     system = {
         "role": "system",
         "content": (
             f"You are an expert AI research assistant helping a user explore the topic '{topic}'. "
-            "You have access to a research report (below) AND your own general knowledge.\n\n"
+            f"Today's date is {today}.\n\n"
+            "You have access to a research report that was compiled using LIVE web searches performed today. "
+            "The report contains the most current publicly available information on this topic.\n\n"
             "Rules:\n"
-            "1. When answering from the report, cite sources like [Source 1].\n"
-            "2. When using your general knowledge (not in the report), prefix with 'Based on general knowledge:'.\n"
-            "3. If the question is about something the report briefly covers, supplement it with what you know.\n"
-            "4. Be helpful, concise, and accurate. Never refuse to answer — always provide the best answer you can.\n\n"
-            f"--- RESEARCH REPORT ---\n{context}\n--- END REPORT ---"
+            "1. ALWAYS treat the research report as your primary and most up-to-date source — it was fetched from the web today.\n"
+            "2. When answering from the report, cite sources like [Source 1].\n"
+            "3. Do NOT say you lack real-time access or suggest checking other sources — the report IS the real-time data.\n"
+            "4. When using knowledge beyond the report, prefix with 'Beyond the report:' and note it may not reflect today's developments.\n"
+            "5. Be helpful, concise, and accurate. Always answer directly based on the report first.\n\n"
+            f"--- RESEARCH REPORT (fetched {today}) ---\n{context}\n--- END REPORT ---"
         ),
     }
     msgs: list[dict] = [system]
