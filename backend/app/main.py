@@ -39,6 +39,7 @@ from .database import (
     add_comment, get_comments, delete_comment,
     save_report_version, get_report_versions, get_report_version,
 )
+from .tools.auto_tagger import extract_tags
 from .tools.error_handler import friendly_error
 from .tools.rate_limit import check_rate_limit
 from .tools.language_detect import detect_language
@@ -253,9 +254,26 @@ async def _update(session_id: str, status: str, report=None):
         await update_session(session_id, status, report)
     except Exception as exc:
         logger.warning("DB update failed for session %s, using memory fallback: %s", session_id[:8], exc)
-    # Snapshot completed report as a new version
+    # Snapshot completed report as a new version and auto-tag
     if status == "completed" and report:
-        _bg_task(save_report_version(session_id, report if isinstance(report, dict) else json.loads(report)))
+        report_dict = report if isinstance(report, dict) else json.loads(report)
+        _bg_task(save_report_version(session_id, report_dict))
+        _bg_task(_auto_tag_session(session_id, report_dict))
+
+
+async def _auto_tag_session(session_id: str, report_dict: dict) -> None:
+    """Extract tags from completed report and persist them."""
+    try:
+        tags = extract_tags(report_dict)
+        if not tags:
+            return
+        sess = _mem.get(session_id, {})
+        user_id = sess.get("user_id")
+        for tag_name in tags:
+            await add_tag(session_id, tag_name, user_id)
+        logger.info("Auto-tagged session %s with: %s", session_id[:8], tags)
+    except Exception as exc:
+        logger.warning("Auto-tagging failed for session %s: %s", session_id[:8], exc)
 
 
 async def _get(session_id: str):
@@ -975,14 +993,15 @@ async def start_research(
     request: ResearchRequest,
     current_user: dict = Depends(get_optional_user),
 ):
-    # 10 research sessions per IP per hour (unauthenticated); 20 for authenticated
-    bucket_key = current_user["id"] if current_user else ""
+    # 20 research sessions per hour for authenticated users (keyed by user id);
+    # 10 per hour for anonymous users (keyed by IP).
+    uid = current_user["id"] if current_user else ""
     check_rate_limit(
         http_request,
         bucket="research_start",
         max_attempts=20 if current_user else 10,
         window_seconds=3600,
-        extra_key=bucket_key,
+        user_id=uid,
     )
     from .tools.content_moderator import moderate_topic
     blocked, reason = moderate_topic(request.topic)

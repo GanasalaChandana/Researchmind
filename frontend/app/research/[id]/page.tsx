@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { streamResearch, createShareLink, getReportVersions, getReportVersion, type ReportVersion } from "@/lib/api";
+import { streamResearch, createShareLink, getReportVersions, getReportVersion, refreshResearch, type ReportVersion } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
@@ -11,7 +11,7 @@ import KnowledgeGraphEmpty from "@/components/KnowledgeGraphEmpty";
 import RelatedResearch from "@/components/RelatedResearch";
 import ReportChat from "@/components/ReportChat";
 import ChainCreator from "@/components/ChainCreator";
-import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy, History, ChevronDown, ChevronUp } from "lucide-react";
+import { Brain, Network, FileText, Loader2, Share2, Check, ArrowLeft, X, Copy, History, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -47,6 +47,7 @@ export default function ResearchSessionPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareLinking, setShareLinking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [versions, setVersions] = useState<ReportVersion[]>([]);
   const [showVersions, setShowVersions] = useState(false);
   const [loadingVersion, setLoadingVersion] = useState<number | null>(null);
@@ -139,6 +140,18 @@ export default function ResearchSessionPage() {
       };
     }
   }, [sessionId]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const { new_session_id } = await refreshResearch(sessionId);
+      toast.success("Re-running research…");
+      router.push(`/research/${new_session_id}?topic=${encodeURIComponent(topic || report?.topic || "")}&depth=3`);
+    } catch {
+      toast.error("Failed to start refresh");
+      setRefreshing(false);
+    }
+  }
 
   async function handleShare() {
     if (shareToken) {
@@ -250,6 +263,19 @@ export default function ResearchSessionPage() {
               {topic || report?.topic || "Research Session"}
             </h1>
           </div>
+
+          {/* Refresh button — only for completed/failed sessions */}
+          {(status === "completed" || status === "failed") && (
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Re-run this research with fresh data"
+              className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-slate-300 hover:text-amber-400 disabled:opacity-50 transition-colors shrink-0"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">{refreshing ? "Starting…" : "Refresh"}</span>
+            </button>
+          )}
 
           <button
             onClick={handleShare}

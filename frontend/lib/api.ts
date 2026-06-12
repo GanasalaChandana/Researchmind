@@ -257,6 +257,41 @@ export async function searchReportContent(query: string): Promise<SearchResult[]
   }
 }
 
+// ─── Refresh / re-run ────────────────────────────────────────────────────────
+
+export async function refreshResearch(sessionId: string): Promise<{ new_session_id: string }> {
+  const res = await fetch(`/api/research/${sessionId}/refresh`, {
+    method: "POST",
+    headers: _authHeaders(),
+  });
+  if (!res.ok) throw new Error("Refresh failed");
+  return res.json();
+}
+
+// ─── Backend comparison ───────────────────────────────────────────────────────
+
+export interface CompareResult {
+  overall_similarity: number;
+  verdict: string;
+  summaries?: { agreement: string[]; contradiction: string[] };
+  sections?: { heading: string; similarity: number }[];
+  sources?: { shared: string[]; only_a: string[]; only_b: string[] };
+  entities?: { shared: string[]; only_a: string[]; only_b: string[] };
+}
+
+export async function compareResearchSessions(idA: string, idB: string): Promise<CompareResult | null> {
+  try {
+    const res = await fetch(`/api/research/compare?a=${idA}&b=${idB}`, {
+      headers: _authHeaders(),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Bulk operations ──────────────────────────────────────────────────────────
 
 export async function bulkDeleteSessions(sessionIds: string[]): Promise<{ deleted: number }> {
@@ -303,6 +338,69 @@ export async function getReportVersion(sessionId: string, version: number): Prom
     cache: "no-store",
   });
   if (!res.ok) return null;
+  return res.json();
+}
+
+// ─── Schedules ────────────────────────────────────────────────────────────────
+
+export interface Schedule {
+  id: string;
+  topic: string;
+  frequency: "daily" | "weekly";
+  hour: number;
+  day_of_week: number;
+  depth: number;
+  is_active: boolean;
+  notify_email: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+}
+
+export async function listSchedules(): Promise<Schedule[]> {
+  const res = await fetch("/api/schedules", { headers: _authHeaders(), cache: "no-store" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.schedules ?? [];
+}
+
+export async function createSchedule(payload: {
+  topic: string;
+  frequency: "daily" | "weekly";
+  hour: number;
+  day_of_week: number;
+  depth: number;
+  notify_email: boolean;
+}): Promise<Schedule> {
+  const res = await fetch("/api/schedules", {
+    method: "POST",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create schedule");
+  return res.json();
+}
+
+export async function toggleSchedule(id: string, is_active: boolean): Promise<Schedule> {
+  const res = await fetch(`/api/schedules/${id}`, {
+    method: "PATCH",
+    headers: { ..._authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active }),
+  });
+  if (!res.ok) throw new Error("Failed to toggle schedule");
+  return res.json();
+}
+
+export async function deleteSchedule(id: string): Promise<void> {
+  await fetch(`/api/schedules/${id}`, { method: "DELETE", headers: _authHeaders() });
+}
+
+export async function runScheduleNow(id: string): Promise<{ session_id: string }> {
+  const res = await fetch(`/api/schedules/${id}/run`, {
+    method: "POST",
+    headers: _authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to trigger schedule");
   return res.json();
 }
 

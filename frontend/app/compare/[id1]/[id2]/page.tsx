@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { streamResearch } from "@/lib/api";
+import { streamResearch, compareResearchSessions, type CompareResult } from "@/lib/api";
 import { AgentEvent, ResearchReport } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -254,14 +254,21 @@ function StreamPanel({
 // ─── Comparison analysis panel ────────────────────────────────────────────────
 
 function AnalysisPanel({
-  report1, report2, label1, label2,
+  report1, report2, label1, label2, backendCompare,
 }: {
   report1: ResearchReport;
   report2: ResearchReport;
   label1: string;
   label2: string;
+  backendCompare?: CompareResult | null;
 }) {
   const analysis = useMemo(() => analyzeReports(report1, report2), [report1, report2]);
+
+  const similarityPct = backendCompare ? Math.round(backendCompare.overall_similarity * 100) : null;
+  const verdictColor =
+    backendCompare?.verdict === "highly similar"    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" :
+    backendCompare?.verdict === "moderately similar" ? "text-amber-400 bg-amber-500/10 border-amber-500/30" :
+                                                       "text-brand-400 bg-brand-500/10 border-brand-500/30";
 
   return (
     <motion.div
@@ -269,10 +276,50 @@ function AnalysisPanel({
       animate={{ opacity: 1, y: 0 }}
       className="glass rounded-2xl p-5 space-y-5 border dark:border-white/8 border-slate-200"
     >
-      <div className="flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-brand-400" />
-        <h3 className="text-sm font-semibold dark:text-white text-slate-900">Comparison Analysis</h3>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-brand-400" />
+          <h3 className="text-sm font-semibold dark:text-white text-slate-900">Comparison Analysis</h3>
+        </div>
+        {/* Backend similarity score badge */}
+        {backendCompare && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200">
+              <span className="text-xs text-slate-500">Similarity</span>
+              <span className="text-sm font-bold dark:text-white text-slate-900">{similarityPct}%</span>
+            </div>
+            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium capitalize ${verdictColor}`}>
+              {backendCompare.verdict}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Backend summary agreements/contradictions */}
+      {backendCompare?.summaries && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {backendCompare.summaries.agreement.length > 0 && (
+            <div className="dark:bg-emerald-500/5 bg-emerald-50 border border-emerald-500/20 rounded-xl p-3">
+              <p className="text-xs font-medium text-emerald-400 mb-1.5">Both sessions agree on</p>
+              <ul className="space-y-1">
+                {backendCompare.summaries.agreement.slice(0, 3).map((s, i) => (
+                  <li key={i} className="text-xs dark:text-slate-400 text-slate-600 leading-relaxed">· {s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {backendCompare.summaries.contradiction.length > 0 && (
+            <div className="dark:bg-amber-500/5 bg-amber-50 border border-amber-500/20 rounded-xl p-3">
+              <p className="text-xs font-medium text-amber-400 mb-1.5">Points of difference</p>
+              <ul className="space-y-1">
+                {backendCompare.summaries.contradiction.slice(0, 3).map((s, i) => (
+                  <li key={i} className="text-xs dark:text-slate-400 text-slate-600 leading-relaxed">· {s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -384,6 +431,7 @@ export default function CompareResultsPage() {
   const [report2, setReport2] = useState<ResearchReport | null>(null);
   const [status1, setStatus1] = useState<"loading" | "completed" | "failed">("loading");
   const [status2, setStatus2] = useState<"loading" | "completed" | "failed">("loading");
+  const [backendCompare, setBackendCompare] = useState<CompareResult | null>(null);
 
   useEffect(() => {
     if (mode !== "existing") return;
@@ -399,6 +447,9 @@ export default function CompareResultsPage() {
       .then(r => r.json())
       .then(d => { setReport2(d?.report ?? null); setStatus2(d?.report ? "completed" : "failed"); })
       .catch(() => setStatus2("failed"));
+
+    // Fetch backend similarity score in parallel
+    compareResearchSessions(id1, id2).then(setBackendCompare).catch(() => {});
   }, [mode, id1, id2]);
 
   const label1 = mode === "existing" ? "Session A" : "Depth 3 — Overview";
@@ -451,6 +502,7 @@ export default function CompareResultsPage() {
             report2={report2!}
             label1={label1}
             label2={label2}
+            backendCompare={backendCompare}
           />
         )}
       </AnimatePresence>

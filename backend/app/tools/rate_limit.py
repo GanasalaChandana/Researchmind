@@ -28,18 +28,25 @@ def check_rate_limit(
     max_attempts: int,
     window_seconds: int,
     extra_key: str = "",
+    user_id: str = "",
 ) -> None:
     """Raise HTTP 429 if more than `max_attempts` occurred within `window_seconds`.
 
-    `bucket` namespaces the limit (e.g. "login"); `extra_key` lets you scope it
-    further (e.g. the target email) so one attacker can't lock out everyone.
+    When `user_id` is provided the limit is keyed by user (not IP), so it applies
+    consistently regardless of which IP the user connects from and prevents shared-IP
+    accounts from consuming each other's quota.
 
     On success, attaches X-RateLimit-* headers to the request state so the
     response middleware can forward them to the client.
     """
     now = time.time()
-    ip = _client_ip(request)
-    key = f"{bucket}:{ip}:{extra_key}"
+    # Authenticated requests: key by user_id so the limit follows the account,
+    # not the network. Unauthenticated: fall back to IP.
+    if user_id:
+        key = f"{bucket}:user:{user_id}:{extra_key}"
+    else:
+        ip = _client_ip(request)
+        key = f"{bucket}:ip:{ip}:{extra_key}"
     dq = _hits[key]
 
     # Drop timestamps outside the window
@@ -80,7 +87,12 @@ def check_rate_limit(
                 del _hits[k]
 
 
-def clear_rate_limit(request: Request, *, bucket: str, extra_key: str = "") -> None:
+def clear_rate_limit(
+    request: Request, *, bucket: str, extra_key: str = "", user_id: str = ""
+) -> None:
     """Reset a bucket (e.g. after a successful login) so good users aren't penalised."""
-    ip = _client_ip(request)
-    _hits.pop(f"{bucket}:{ip}:{extra_key}", None)
+    if user_id:
+        _hits.pop(f"{bucket}:user:{user_id}:{extra_key}", None)
+    else:
+        ip = _client_ip(request)
+        _hits.pop(f"{bucket}:ip:{ip}:{extra_key}", None)

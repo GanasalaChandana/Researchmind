@@ -30,9 +30,8 @@ interface Schedule {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
-const DAYS    = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const HOURS   = Array.from({ length: 24 }, (_, i) => i);
+const DAYS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +108,7 @@ export default function SchedulesPage() {
   async function fetchSchedules() {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND}/schedules`, { headers: authHeaders() });
+      const res = await fetch(`/api/schedules`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setSchedules(data.schedules ?? []);
@@ -123,7 +122,7 @@ export default function SchedulesPage() {
     if (!topic.trim()) { toast.error("Topic cannot be empty"); return; }
     setCreating(true);
     try {
-      const res = await fetch(`${BACKEND}/schedules`, {
+      const res = await fetch(`/api/schedules`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({ topic: topic.trim(), frequency, day_of_week: dayOfWeek, hour, depth, notify_email: notifyEmail }),
@@ -142,7 +141,7 @@ export default function SchedulesPage() {
   }
 
   async function toggleActive(s: Schedule) {
-    const res = await fetch(`${BACKEND}/schedules/${s.id}`, {
+    const res = await fetch(`/api/schedules/${s.id}`, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify({ is_active: !s.is_active }),
@@ -157,7 +156,7 @@ export default function SchedulesPage() {
   }
 
   async function deleteSchedule(id: string) {
-    const res = await fetch(`${BACKEND}/schedules/${id}`, {
+    const res = await fetch(`/api/schedules/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -172,7 +171,7 @@ export default function SchedulesPage() {
   async function runNow(s: Schedule) {
     setRunning(s.id);
     try {
-      const res = await fetch(`${BACKEND}/schedules/${s.id}/run`, {
+      const res = await fetch(`/api/schedules/${s.id}/run`, {
         method: "POST",
         headers: authHeaders(),
       });
