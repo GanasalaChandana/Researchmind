@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Key, Plus, Trash2, Copy, Check, Eye, EyeOff,
   AlertTriangle, ExternalLink, RefreshCw, Shield,
-  Code2, Zap, ChevronDown, ChevronUp,
+  Code2, Zap, ChevronDown, ChevronUp, ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 // Call the Railway backend directly — bypasses Next.js proxy entirely.
 // CORS is already configured on the backend to allow researchmind*.vercel.app.
@@ -120,6 +121,7 @@ const data = await res.json();`,
 
 export default function DeveloperPage() {
   const { isAuthenticated } = useAuth();
+  const router = useRouter();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -176,6 +178,12 @@ export default function DeveloperPage() {
 
         {/* Header */}
         <div>
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-1.5 text-sm dark:text-slate-400 text-slate-500 hover:text-brand-500 transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center">
               <Code2 className="w-5 h-5 text-brand-400" />
