@@ -565,7 +565,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12 relative overflow-x-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-12 relative overflow-x-hidden hero-grid">
 
       {/* ── Animated background ── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
@@ -820,28 +820,35 @@ export default function HomePage() {
         onClick={() => { setOpenMenu(null); setShowSuggestions(false); }}
       >
         {/* ── Hero ── */}
-        <div className="text-center mb-8 sm:mb-12">
+        <div className="text-center mb-8 sm:mb-12 relative">
+          {/* Background glow orbs */}
+          <div className="glow-orb-1" />
+          <div className="glow-orb-2" />
+          <div className="glow-orb-3" />
 
           {/* Badge pill */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.0 }}
-            className="inline-flex items-center gap-2 mb-4 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300"
+            className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full bg-brand-500/10 border border-brand-500/25 text-xs text-brand-300 backdrop-blur-sm"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
             {t.badgePowered}
           </motion.div>
 
-          {/* Logo — centered as a block */}
+          {/* Logo */}
           <motion.div
-            initial={{ scale: 0.7, opacity: 0 }}
+            initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 180, damping: 14 }}
-            className="flex items-center justify-center mb-5"
+            transition={{ type: "spring", stiffness: 160, damping: 12 }}
+            className="flex items-center justify-center mb-6"
           >
-            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-brand-500/30 via-brand-500/20 to-violet-500/20 border border-brand-500/40 shadow-2xl shadow-brand-500/20">
-              <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-brand-400" />
+            <div className="relative">
+              <div className="absolute inset-0 rounded-3xl bg-brand-500/30 blur-2xl scale-150" />
+              <div className="relative inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-brand-500/40 via-brand-500/25 to-violet-500/30 border border-brand-500/50 shadow-2xl shadow-brand-500/30">
+                <Sparkles className="w-10 h-10 sm:w-12 sm:h-12 text-brand-300" />
+              </div>
             </div>
           </motion.div>
 
@@ -849,19 +856,19 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-4xl sm:text-5xl font-black tracking-tight mb-3"
+            className="text-5xl sm:text-6xl font-black tracking-tight mb-4"
           >
-            <span className="bg-gradient-to-r from-white via-slate-200 to-brand-300 bg-clip-text text-transparent dark:from-white dark:via-slate-200 dark:to-brand-300 from-slate-900 via-slate-700 to-brand-600">
+            <span className="bg-gradient-to-r from-white via-brand-200 to-violet-300 bg-clip-text text-transparent dark:from-white dark:via-brand-200 dark:to-violet-300 from-slate-900 via-brand-700 to-violet-700">
               ResearchMind
             </span>
           </motion.h1>
 
-          {/* Tagline with rotating word — fixed spacing */}
+          {/* Tagline with rotating word */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18 }}
-            className="dark:text-slate-400 text-slate-600 text-base sm:text-lg max-w-sm mx-auto leading-relaxed h-7 flex items-center justify-center gap-1.5"
+            className="dark:text-slate-400 text-slate-500 text-lg sm:text-xl max-w-md mx-auto leading-relaxed h-8 flex items-center justify-center gap-1.5 mb-2"
           >
             <span>{t.heroTagline1}</span>
             <AnimatePresence mode="wait">
@@ -879,12 +886,38 @@ export default function HomePage() {
             <span>—</span>
           </motion.div>
 
+          {/* Feature cards strip */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="grid grid-cols-3 gap-2 sm:gap-3 mt-6 mb-2"
+          >
+            {[
+              { icon: "🔍", label: "Live Web Search", desc: "Real-time sources" },
+              { icon: "🧠", label: "Multi-Agent AI", desc: "4 agents in parallel" },
+              { icon: "📊", label: "Knowledge Graph", desc: "Visual connections" },
+            ].map((f, i) => (
+              <motion.div
+                key={f.label}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.28 + i * 0.06 }}
+                className="feature-card glass rounded-xl p-3 sm:p-4 text-center cursor-default"
+              >
+                <div className="text-xl sm:text-2xl mb-1.5">{f.icon}</div>
+                <p className="text-xs font-semibold dark:text-slate-200 text-slate-700">{f.label}</p>
+                <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5">{f.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
           {/* Live capability dots */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.28 }}
-            className="flex items-center justify-center gap-4 sm:gap-5 mt-4 text-xs text-slate-500 flex-wrap"
+            transition={{ delay: 0.35 }}
+            className="flex items-center justify-center gap-4 sm:gap-5 mt-5 text-xs text-slate-500 flex-wrap"
           >
             {[
               { dot: "bg-brand-400",   label: t.dot1 },
@@ -906,7 +939,7 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.22 }}
-          className="relative glass rounded-2xl p-4 sm:p-6 space-y-4 border dark:border-brand-500/20 border-slate-200/80 shadow-xl shadow-brand-500/10 dark:shadow-brand-500/10 ring-1 ring-brand-500/5"
+          className="relative glass rounded-2xl p-4 sm:p-6 space-y-4 border dark:border-brand-500/25 border-slate-200/80 shadow-xl shadow-brand-500/15 dark:shadow-brand-500/15 ring-1 ring-brand-500/10 search-glow"
         >
           {/* Custom Prompts */}
           <PromptCustomizer onSelectPrompt={setCustomPrompts} />
@@ -1160,6 +1193,25 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        {/* ── Stats strip ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mt-6 grid grid-cols-3 gap-3"
+        >
+          {[
+            { value: "4", label: "AI Agents", suffix: "×" },
+            { value: "10K", label: "Reports Built", suffix: "+" },
+            { value: "Real-time", label: "Web Sources", suffix: "" },
+          ].map((s, i) => (
+            <div key={s.label} className="glass rounded-xl py-3 px-2 text-center feature-card">
+              <p className="stat-number text-lg sm:text-xl font-black">{s.value}{s.suffix}</p>
+              <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </motion.div>
 
         {/* Examples */}
         <div className="mt-5">
