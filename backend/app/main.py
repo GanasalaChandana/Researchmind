@@ -68,7 +68,6 @@ from .routes.public_api import router as public_api_router
 from .auth.dependencies import get_optional_user, get_current_user
 
 
-@asynccontextmanager
 async def _run_migrations() -> None:
     """Run Alembic migrations in a thread pool (Alembic is synchronous)."""
     import asyncio, os, pathlib
