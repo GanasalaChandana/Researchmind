@@ -744,7 +744,7 @@ def _build_llm_messages(context: str, history: list[dict], topic: str) -> list[d
             "Rules:\n"
             "1. ALWAYS treat the research report as your primary and most up-to-date source — it was fetched from the web today.\n"
             "2. When answering from the report, cite sources like [Source 1].\n"
-            "3. Do NOT say you lack real-time access or suggest checking other sources — the report IS the real-time data.\n"
+            "3. Do NOT add disclaimers like 'the report may not have real-time updates' or suggest checking other sources — the report IS the real-time data, fetched today.\n"
             "4. When using knowledge beyond the report, prefix with 'Beyond the report:' and note it may not reflect today's developments.\n"
             "5. Be helpful, concise, and accurate. Always answer directly based on the report first.\n\n"
             f"--- RESEARCH REPORT (fetched {today}) ---\n{context}\n--- END REPORT ---"
