@@ -820,64 +820,54 @@ export default function HomePage() {
         onClick={() => { setOpenMenu(null); setShowSuggestions(false); }}
       >
         {/* ── Hero ── */}
-        <div className="text-center mb-8 sm:mb-12 relative">
-          {/* Background glow orbs */}
-          <div className="glow-orb-1" />
-          <div className="glow-orb-2" />
-          <div className="glow-orb-3" />
+        <div className="text-center mb-8 sm:mb-10">
 
           {/* Badge pill */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.0 }}
-            className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full bg-brand-500/10 border border-brand-500/25 text-xs text-brand-300 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-brand-500/10 border border-brand-500/25 text-xs text-brand-400 dark:text-brand-300 backdrop-blur-sm"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
             {t.badgePowered}
           </motion.div>
 
-          {/* Logo */}
+          {/* Logo + Title row */}
           <motion.div
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 160, damping: 12 }}
-            className="flex items-center justify-center mb-6"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, type: "spring", stiffness: 120, damping: 16 }}
+            className="flex items-center justify-center gap-4 mb-4"
           >
-            <div className="relative">
-              <div className="absolute inset-0 rounded-3xl bg-brand-500/30 blur-2xl scale-150" />
-              <div className="relative inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-brand-500/40 via-brand-500/25 to-violet-500/30 border border-brand-500/50 shadow-2xl shadow-brand-500/30">
-                <Sparkles className="w-10 h-10 sm:w-12 sm:h-12 text-brand-300" />
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-2xl bg-brand-500/40 blur-xl scale-150" />
+              <div className="relative inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-brand-500 via-brand-400 to-violet-500 shadow-xl shadow-brand-500/40">
+                <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
               </div>
             </div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-none">
+              <span className="bg-gradient-to-r from-indigo-400 via-brand-300 to-violet-400 bg-clip-text text-transparent dark:from-indigo-300 dark:via-white dark:to-violet-300">
+                ResearchMind
+              </span>
+            </h1>
           </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-5xl sm:text-6xl font-black tracking-tight mb-4"
-          >
-            <span className="bg-gradient-to-r from-white via-brand-200 to-violet-300 bg-clip-text text-transparent dark:from-white dark:via-brand-200 dark:to-violet-300 from-slate-900 via-brand-700 to-violet-700">
-              ResearchMind
-            </span>
-          </motion.h1>
 
           {/* Tagline with rotating word */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18 }}
-            className="dark:text-slate-400 text-slate-500 text-lg sm:text-xl max-w-md mx-auto leading-relaxed h-8 flex items-center justify-center gap-1.5 mb-2"
+            className="dark:text-slate-400 text-slate-500 text-base sm:text-lg max-w-sm mx-auto h-7 flex items-center justify-center gap-1.5 mb-8"
           >
             <span>{t.heroTagline1}</span>
             <AnimatePresence mode="wait">
               <motion.span
                 key={ROTATING_WORDS[wordIdx].word}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
                 className={`font-semibold ${ROTATING_WORDS[wordIdx].color}`}
               >
                 {t.heroTaglineRotating[wordIdx % t.heroTaglineRotating.length]}
@@ -886,28 +876,32 @@ export default function HomePage() {
             <span>—</span>
           </motion.div>
 
-          {/* Feature cards strip */}
+          {/* Feature cards strip + Stats combined */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="grid grid-cols-3 gap-2 sm:gap-3 mt-6 mb-2"
+            className="grid grid-cols-3 gap-2 sm:gap-3 mb-3"
           >
             {[
-              { icon: "🔍", label: "Live Web Search", desc: "Real-time sources" },
-              { icon: "🧠", label: "Multi-Agent AI", desc: "4 agents in parallel" },
-              { icon: "📊", label: "Knowledge Graph", desc: "Visual connections" },
+              { icon: <Search className="w-5 h-5 text-brand-400" />,   label: "Live Web Search",  desc: "Real-time sources",    stat: "100+",  statLabel: "Sources/query" },
+              { icon: <Brain  className="w-5 h-5 text-violet-400" />,  label: "Multi-Agent AI",   desc: "4 agents in parallel", stat: "4×",    statLabel: "AI agents" },
+              { icon: <Network className="w-5 h-5 text-emerald-400" />, label: "Knowledge Graph",  desc: "Visual connections",   stat: "Live",  statLabel: "Web data" },
             ].map((f, i) => (
               <motion.div
                 key={f.label}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.28 + i * 0.06 }}
-                className="feature-card glass rounded-xl p-3 sm:p-4 text-center cursor-default"
+                className="feature-card glass rounded-xl p-3 sm:p-4 text-center cursor-default group"
               >
-                <div className="text-xl sm:text-2xl mb-1.5">{f.icon}</div>
-                <p className="text-xs font-semibold dark:text-slate-200 text-slate-700">{f.label}</p>
+                <div className="flex justify-center mb-2">{f.icon}</div>
+                <p className="text-xs font-bold dark:text-slate-100 text-slate-800 leading-tight">{f.label}</p>
                 <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5">{f.desc}</p>
+                <div className="mt-2 pt-2 border-t dark:border-white/5 border-slate-100">
+                  <span className="text-sm font-black stat-number">{f.stat}</span>
+                  <p className="text-[9px] dark:text-slate-600 text-slate-400">{f.statLabel}</p>
+                </div>
               </motion.div>
             ))}
           </motion.div>
@@ -916,8 +910,8 @@ export default function HomePage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.35 }}
-            className="flex items-center justify-center gap-4 sm:gap-5 mt-5 text-xs text-slate-500 flex-wrap"
+            transition={{ delay: 0.38 }}
+            className="flex items-center justify-center gap-3 sm:gap-5 text-xs dark:text-slate-500 text-slate-400 flex-wrap"
           >
             {[
               { dot: "bg-brand-400",   label: t.dot1 },
@@ -926,7 +920,7 @@ export default function HomePage() {
               { dot: "bg-amber-400",   label: t.dot4 },
             ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${dot} shadow-sm`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${dot} animate-pulse`} />
                 {label}
               </span>
             ))}
@@ -1193,25 +1187,6 @@ export default function HomePage() {
             </div>
           </div>
         )}
-
-        {/* ── Stats strip ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-6 grid grid-cols-3 gap-3"
-        >
-          {[
-            { value: "4", label: "AI Agents", suffix: "×" },
-            { value: "10K", label: "Reports Built", suffix: "+" },
-            { value: "Real-time", label: "Web Sources", suffix: "" },
-          ].map((s, i) => (
-            <div key={s.label} className="glass rounded-xl py-3 px-2 text-center feature-card">
-              <p className="stat-number text-lg sm:text-xl font-black">{s.value}{s.suffix}</p>
-              <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </motion.div>
 
         {/* Examples */}
         <div className="mt-5">
