@@ -4,7 +4,6 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
-import SentryInit from "@/components/SentryInit";
 
 export const metadata: Metadata = {
   title: "ResearchMind — AI Research Agent",
@@ -15,7 +14,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <SentryInit />
         <ThemeProvider>
           <AuthProvider>
             <LanguageProvider>
