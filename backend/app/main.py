@@ -302,22 +302,10 @@ async def _update(session_id: str, status: str, report=None):
     if status == "completed" and report:
         report_dict = report if isinstance(report, dict) else json.loads(report)
         _bg_task(save_report_version(session_id, report_dict))
-        _bg_task(_auto_tag_session(session_id, report_dict))
-
-
-async def _auto_tag_session(session_id: str, report_dict: dict) -> None:
-    """Extract tags from completed report and persist them."""
-    try:
-        tags = extract_tags(report_dict)
-        if not tags:
-            return
         sess = _mem.get(session_id, {})
-        user_id = sess.get("user_id")
-        for tag_name in tags:
-            await add_tag(session_id, tag_name, user_id)
-        logger.info("Auto-tagged session %s with: %s", session_id[:8], tags)
-    except Exception as exc:
-        logger.warning("Auto-tagging failed for session %s: %s", session_id[:8], exc)
+        _user_id = sess.get("user_id")
+        topic = sess.get("topic", "")
+        _bg_task(_auto_tag_session(session_id, topic, report_dict, _user_id))
 
 
 async def _get(session_id: str):
