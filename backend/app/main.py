@@ -2575,3 +2575,37 @@ async def assign_collection(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+# ─── Public profile ───────────────────────────────────────────────────────────
+
+@app.get("/profile/{user_id}")
+async def get_public_profile(user_id: str):
+    """Public profile: user info + their completed shared/public research sessions."""
+    from .auth.user_db import get_user_by_id
+    from .database import get_research_count
+    user = await get_user_by_id(user_id)
+    if not user or user.get("email", "").startswith("deleted_"):
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    count = await get_research_count(user_id)
+    sessions = await _list(user_id=user_id)
+    public_sessions = [
+        {
+            "id": s["id"],
+            "topic": s.get("topic", ""),
+            "created_at": str(s.get("created_at", "")),
+            "is_favorite": s.get("is_favorite", False),
+            "tags": s.get("tags", []),
+        }
+        for s in sessions
+        if s.get("status") == "completed"
+    ][:20]
+
+    return {
+        "id": user["id"],
+        "name": user.get("name") or user["email"].split("@")[0],
+        "research_count": count,
+        "joined_at": str(user.get("created_at", "")),
+        "sessions": public_sessions,
+    }

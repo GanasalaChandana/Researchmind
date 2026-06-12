@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { saveTokens } from "@/lib/auth";
 import toast from "react-hot-toast";
 import {
-  User, Lock, Trash2, ArrowLeft, Loader2, Check, Eye, EyeOff,
+  User, Lock, Trash2, ArrowLeft, Loader2, Check, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
@@ -307,6 +307,21 @@ export default function SettingsPage() {
 
         <div className="space-y-6">
           <ProfileSection user={user} setUser={setUser} />
+
+          {/* Public profile link */}
+          <div className="glass rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium dark:text-white text-slate-900">Public Profile</p>
+              <p className="text-xs dark:text-slate-400 text-slate-500 mt-0.5">Share your research portfolio with others</p>
+            </div>
+            <button
+              onClick={() => router.push(`/profile/${user.id}`)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg dark:bg-white/5 bg-slate-100 dark:text-slate-300 text-slate-600 hover:text-brand-400 transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> View
+            </button>
+          </div>
+
           <PasswordSection isOAuthUser={isOAuthUser} />
           <DangerZone onDeleted={handleDeleted} />
         </div>
