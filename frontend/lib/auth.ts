@@ -9,6 +9,7 @@ export interface User {
   name: string;
   created_at: string;
   research_count: number;
+  monthly_count?: number;
   api_key?: string;
 }
 

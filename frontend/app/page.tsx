@@ -586,6 +586,20 @@ export default function HomePage() {
               <UserCircle2 className="w-4 h-4" />
               {user?.name}
             </span>
+            {user?.monthly_count !== undefined && (
+              <div className="hidden sm:flex items-center gap-1.5" title={`${user.monthly_count} researches this month`}>
+                <div className="w-16 h-1.5 rounded-full dark:bg-white/10 bg-slate-200 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      user.monthly_count >= 45 ? "bg-red-400" :
+                      user.monthly_count >= 30 ? "bg-amber-400" : "bg-emerald-400"
+                    }`}
+                    style={{ width: `${Math.min(100, (user.monthly_count / 50) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs dark:text-slate-500 text-slate-400">{user.monthly_count}/50</span>
+              </div>
+            )}
             <button
               onClick={() => router.push("/settings")}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg

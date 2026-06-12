@@ -125,6 +125,21 @@ async def get_research_count(user_id: str) -> int:
         return row["cnt"] if row else 0
 
 
+async def get_monthly_research_count(user_id: str) -> int:
+    """Count research sessions this calendar month."""
+    pool = await get_pool()
+    if pool is None:
+        return 0
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) as cnt FROM sessions
+               WHERE user_id = $1
+               AND created_at >= date_trunc('month', NOW())""",
+            user_id,
+        )
+        return row["cnt"] if row else 0
+
+
 async def store_refresh_token(jti: str, user_id: str, expires_at: datetime):
     pool = await get_pool()
     if pool is None:

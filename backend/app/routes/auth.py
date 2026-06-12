@@ -1,4 +1,5 @@
 """Auth routes: register, login, refresh, logout, me, update profile, change password"""
+import asyncio
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 
@@ -25,7 +26,7 @@ from ..auth.dependencies import get_current_user
 # Import database functions
 from ..auth.user_db import (
     create_user, get_user_by_email, get_user_by_id,
-    update_user, get_research_count,
+    update_user, get_research_count, get_monthly_research_count,
     store_refresh_token, revoke_refresh_token, is_refresh_token_valid,
     store_reset_token, consume_reset_token,
 )
@@ -39,7 +40,7 @@ from ..tools.rate_limit import check_rate_limit, clear_rate_limit
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _user_out(user: dict, research_count: int = 0) -> UserOut:
+def _user_out(user: dict, research_count: int = 0, monthly_count: int = 0) -> UserOut:
     """Convert user dict to UserOut response model"""
     created = user.get("created_at", "")
     if hasattr(created, "isoformat"):
@@ -50,6 +51,7 @@ def _user_out(user: dict, research_count: int = 0) -> UserOut:
         name=user["name"],
         created_at=str(created),
         research_count=research_count,
+        monthly_count=monthly_count,
         api_key=user.get("api_key"),
     )
 
@@ -195,8 +197,11 @@ async def logout(
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Get current user profile"""
-    count = await get_research_count(current_user["id"])
-    return _user_out(current_user, count)
+    count, monthly = await asyncio.gather(
+        get_research_count(current_user["id"]),
+        get_monthly_research_count(current_user["id"]),
+    )
+    return _user_out(current_user, count, monthly)
 
 
 # ── Update Profile ────────────────────────────────────────────────────────────

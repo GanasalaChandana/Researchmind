@@ -46,6 +46,7 @@ class UserOut(BaseModel):
     name: str
     created_at: str
     research_count: int = 0
+    monthly_count: int = 0
     api_key: Optional[str] = None
 
 
