@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 async function handler(req: NextRequest, { params }: { params: { path: string[] } }) {
   const subPath = params.path.join("/");

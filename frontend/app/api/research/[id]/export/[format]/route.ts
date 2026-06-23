@@ -2,7 +2,7 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string; format: string } }
 ) {
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 
   try {
     const response = await fetch(

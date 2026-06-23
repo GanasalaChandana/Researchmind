@@ -5,7 +5,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const style = searchParams.get("style") || "apa";
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 
   try {
     const response = await fetch(
