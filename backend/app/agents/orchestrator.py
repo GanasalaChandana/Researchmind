@@ -34,7 +34,7 @@ Return a JSON object with this exact structure:
 
 Return only valid JSON, no markdown fences."""
 
-    response = groq_with_retry(
+    response = await groq_with_retry(
         client,
         model="llama-3.3-70b-versatile",
         max_tokens=512,

@@ -80,7 +80,7 @@ Return a JSON object:
 Entity types: concept, person, organization, event, technology
 Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
-    kg_response = groq_with_retry(
+    kg_response = await groq_with_retry(
         client,
         model=model_id,
         max_tokens=2000,
@@ -135,7 +135,7 @@ Return a JSON object:
 
 Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
 
-    report_response = groq_with_retry(
+    report_response = await groq_with_retry(
         client,
         model=model_id,
         max_tokens=max_report_tokens,

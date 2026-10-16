@@ -1639,6 +1639,12 @@ async def stream_research(
     model_tier: str = Query(default="balanced", pattern="^(fast|balanced|deep)$"),
     bypass_cache: bool = Query(default=False),
 ):
+    # Guard: the stream burns paid LLM/search quota, so it must belong to a session
+    # created via /research/start and is rate-limited per client.
+    check_rate_limit(http_request, bucket="research_stream", max_attempts=30, window_seconds=3600)
+    if not await _get(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
     async def event_generator():
         all_sources = []
         sub_questions = []
@@ -2382,6 +2388,9 @@ async def create_user_webhook(
 
     The `secret` field is returned **only once** in this response — store it safely.
     """
+    from .tools.url_safety import is_public_url_literal
+    if not req.url.startswith("https://") or not is_public_url_literal(req.url):
+        raise HTTPException(status_code=422, detail="Webhook URL must be an https:// URL on a public host")
     hook = await create_webhook_db(
         user_id=current_user["id"],
         url=req.url,

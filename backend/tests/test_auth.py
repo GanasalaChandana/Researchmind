@@ -127,7 +127,8 @@ def test_change_password_wrong_current(client):
 
 # ── Password reset flow ─────────────────────────────────────────────────────────
 
-def test_forgot_and_reset_password(client):
+def test_forgot_and_reset_password(client, monkeypatch):
+    monkeypatch.setattr('app.routes.auth.ALLOW_DEV_RESET_TOKEN', True)
     register(client)
     # Request reset — dev fallback returns the token in the response
     fr = client.post("/auth/forgot-password", json={"email": "alice@example.com"})
@@ -143,7 +144,8 @@ def test_forgot_and_reset_password(client):
     assert client.post("/auth/login", json={"email": "alice@example.com", "password": "Password123"}).status_code == 401
 
 
-def test_reset_token_is_single_use(client):
+def test_reset_token_is_single_use(client, monkeypatch):
+    monkeypatch.setattr('app.routes.auth.ALLOW_DEV_RESET_TOKEN', True)
     register(client)
     token = client.post("/auth/forgot-password", json={"email": "alice@example.com"}).json()["reset_token"]
     assert client.post("/auth/reset-password", json={"token": token, "new_password": "ResetPass789"}).status_code == 200
@@ -181,3 +183,14 @@ def test_successful_login_resets_rate_counter(client):
     # So we can fail several more times without being immediately blocked
     r = client.post("/auth/login", json={"email": "alice@example.com", "password": "WrongPass123"})
     assert r.status_code == 401
+
+
+def test_forgot_password_never_leaks_token_by_default(client):
+    """Regression: the reset token must not be returned to the requester (account takeover)."""
+    register(client)
+    r = client.post("/auth/forgot-password", json={"email": "alice@example.com"})
+    assert r.status_code == 200
+    assert "reset_token" not in r.json()
+    # Response must be indistinguishable from the unknown-email case
+    ghost = client.post("/auth/forgot-password", json={"email": "ghost@example.com"})
+    assert r.json() == ghost.json()
