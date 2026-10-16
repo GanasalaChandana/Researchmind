@@ -34,7 +34,7 @@ Content:
 Return only the summary, no preamble."""
 
             try:
-                response = groq_with_retry(
+                response = await groq_with_retry(
                     client,
                     model="llama-3.1-8b-instant",
                     messages=[{"role": "user", "content": prompt}],

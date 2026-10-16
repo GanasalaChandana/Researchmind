@@ -27,6 +27,9 @@ class WebhookRequest(BaseModel):
     def url_must_be_https(cls, v: str) -> str:
         if not v.startswith("https://"):
             raise ValueError("Webhook URL must start with https://")
+        from ..tools.url_safety import is_public_url_literal
+        if not is_public_url_literal(v):
+            raise ValueError("Webhook URL must point to a public host")
         return v
 
 

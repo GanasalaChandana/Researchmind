@@ -11,7 +11,7 @@ Usage:
 
     async def call():
         async with _cb:
-            return groq_with_retry(client, ...)
+            return await groq_with_retry(client, ...)
 """
 import asyncio
 import logging
