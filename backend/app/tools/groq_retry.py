@@ -75,8 +75,8 @@ async def groq_with_retry(client, max_retries: int = 5, **kwargs):
                 if is_rate_limit and attempt < max_retries - 1:
                     wait = retry_delay(exc, attempt)
                     logger.warning(
-                        "Groq rate limit hit (attempt %d/%d), retrying in %.0fs",
-                        attempt + 1, max_retries, wait,
+                        "Groq rate limit hit (attempt %d/%d), retrying in %.0fs: %s",
+                        attempt + 1, max_retries, wait, str(exc)[:300],
                     )
                     await asyncio.sleep(wait)
                     continue
