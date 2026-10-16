@@ -1,6 +1,6 @@
 name: Eval
 
-# Manual only: calls your live backend (uses real Groq/Tavily quota, ~8 research runs).
+# Manual only: calls your live backend (uses real Groq/Tavily quota, 3 research runs by default).
 # Actions tab -> Eval -> Run workflow. Results appear in the run summary and as an artifact.
 on:
   workflow_dispatch:
@@ -9,13 +9,13 @@ on:
         description: Backend base URL
         default: https://researchmind-q4fp.onrender.com
       limit:
-        description: Number of topics to run (max 8 with anonymous rate limits)
-        default: "8"
+        description: Number of topics (3 fits the Groq free tier; up to 8 on a paid plan)
+        default: "3"
 
 jobs:
   eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

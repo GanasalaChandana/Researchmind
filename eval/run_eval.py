@@ -116,10 +116,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default=os.environ.get("EVAL_BASE_URL", "https://researchmind-q4fp.onrender.com"))
     ap.add_argument("--topics", default=str(Path(__file__).parent / "topics.json"))
-    ap.add_argument("--limit", type=int, default=8)
+    ap.add_argument("--limit", type=int, default=3, help="topics to run; 3 fits the Groq free tier, use up to 8 on a paid plan")
     ap.add_argument("--depth", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=300, help="seconds per topic")
-    ap.add_argument("--pause", type=int, default=60, help="seconds between topics (Groq free-tier limits are per minute)")
+    ap.add_argument("--pause", type=int, default=180, help="seconds between topics (Groq free tier: 8K tokens/min, 200K/day)")
     ap.add_argument("--out", default=str(Path(__file__).parent / "results"))
     args = ap.parse_args()
 
@@ -127,6 +127,7 @@ def main() -> int:
     topics = json.loads(Path(args.topics).read_text())[: args.limit]
     warm_up(base)
     rows = []
+    limited_streak = 0
     for i, topic in enumerate(topics, 1):
         print(f"[{i}/{len(topics)}] {topic}", flush=True)
         row = run_topic(base, topic, args.depth, args.timeout)
@@ -135,8 +136,13 @@ def main() -> int:
             time.sleep(90)
             row = run_topic(base, topic, args.depth, args.timeout)
             row["retried"] = True
+        limited = (not row["ok"]) and "rate limit" in row.get("error", "").lower()
+        limited_streak = limited_streak + 1 if limited else 0
         print("   ->", "ok" if row["ok"] else f"FAILED ({row.get('error')})", f"{row['latency_s']}s", flush=True)
         rows.append(row)
+        if limited_streak >= 2:
+            print("stopping early: the AI provider quota looks exhausted; wasting no more tokens", flush=True)
+            break
         if i < len(topics):
             time.sleep(args.pause)
 
