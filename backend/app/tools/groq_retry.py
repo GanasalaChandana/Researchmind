@@ -21,6 +21,23 @@ logger = logging.getLogger(__name__)
 _RATE_LIMIT_SIGNALS = ("rate_limit", "429", "too many requests", "ratelimit")
 _TRY_AGAIN = re.compile(r"try again in (?:(\d+)m)?\s*(\d+(?:\.\d+)?)s", re.IGNORECASE)
 MAX_BACKOFF_S = 60.0
+# If Groq says to wait longer than this, it's a daily/hourly quota, not a per-minute
+# burst. Waiting would just hang the user's research for minutes, so fail fast.
+GIVE_UP_AFTER_S = 120.0
+
+
+def retry_hint(exc: Exception):
+    """Seconds Groq asked us to wait (Retry-After header or 'try again in ...'), or None."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if headers:
+        try:
+            return float(headers.get("retry-after"))
+        except (TypeError, ValueError):
+            pass
+    m = _TRY_AGAIN.search(str(exc))
+    if m:
+        return int(m.group(1) or 0) * 60 + float(m.group(2))
+    return None
 
 
 def retry_delay(exc: Exception, attempt: int) -> float:
@@ -28,17 +45,7 @@ def retry_delay(exc: Exception, attempt: int) -> float:
     'Please try again in 12.5s' in the message); otherwise exponential 2s, 4s, 8s...
     Per-minute token limits only reset after ~a minute, so a fixed 2-4s retry just
     burns the retries and fails."""
-    wait = None
-    headers = getattr(getattr(exc, "response", None), "headers", None)
-    if headers:
-        try:
-            wait = float(headers.get("retry-after"))
-        except (TypeError, ValueError):
-            wait = None
-    if wait is None:
-        m = _TRY_AGAIN.search(str(exc))
-        if m:
-            wait = int(m.group(1) or 0) * 60 + float(m.group(2))
+    wait = retry_hint(exc)
     if wait is None:
         return min(float(2 ** (attempt + 1)), MAX_BACKOFF_S)
     return min(max(wait + 1.0, 2.0), MAX_BACKOFF_S)  # +1s margin over Groq's hint
@@ -61,6 +68,10 @@ async def groq_with_retry(client, max_retries: int = 5, **kwargs):
             except Exception as exc:
                 msg = str(exc).lower()
                 is_rate_limit = any(sig in msg for sig in _RATE_LIMIT_SIGNALS)
+                hint = retry_hint(exc) if is_rate_limit else None
+                if hint is not None and hint > GIVE_UP_AFTER_S:
+                    logger.error("Groq quota exhausted (retry in %.0fs); failing fast", hint)
+                    raise
                 if is_rate_limit and attempt < max_retries - 1:
                     wait = retry_delay(exc, attempt)
                     logger.warning(

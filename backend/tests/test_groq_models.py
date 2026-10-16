@@ -65,3 +65,33 @@ def test_ascii_topics_skip_the_language_llm_call(monkeypatch):
     from app.tools import language_detect
     monkeypatch.setattr(language_detect, "Groq", lambda **k: (_ for _ in ()).throw(AssertionError("LLM called")))
     assert language_detect.detect_language("How do solid-state batteries work?") == "English"
+
+
+def test_quota_exhausted_fails_fast():
+    import asyncio
+    from app.tools.groq_retry import groq_with_retry, retry_hint
+
+    class Quota(Exception):
+        pass
+
+    calls = {"n": 0}
+
+    class _C:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls["n"] += 1
+                    raise Quota("429 rate_limit: Please try again in 41m12s")
+
+    assert retry_hint(Quota("try again in 41m12s")) == 41 * 60 + 12
+    loop = asyncio.new_event_loop()
+    try:
+        try:
+            loop.run_until_complete(groq_with_retry(_C, model="x", messages=[]))
+            assert False, "should raise"
+        except Quota:
+            pass
+    finally:
+        loop.close()
+    assert calls["n"] == 1
