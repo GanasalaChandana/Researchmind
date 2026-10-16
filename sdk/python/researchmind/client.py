@@ -15,7 +15,7 @@ from .exceptions import (
     TimeoutError,
 )
 
-DEFAULT_BASE_URL = "https://researchmind-production-b6ca.up.railway.app"
+DEFAULT_BASE_URL = "https://researchmind-q4fp.onrender.com"
 DEFAULT_TIMEOUT = 300  # 5 minutes
 DEFAULT_POLL_INTERVAL = 5  # seconds
 

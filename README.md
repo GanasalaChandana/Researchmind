@@ -5,7 +5,7 @@
 > Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + REST API access.
 
 🔗 **Live App:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)  
-🔗 **Backend API:** [researchmind-production-b6ca.up.railway.app](https://researchmind-production-b6ca.up.railway.app)
+🔗 **Backend API:** [researchmind-q4fp.onrender.com](https://researchmind-q4fp.onrender.com) (Render free tier — first request after idle takes ~30–60s to wake)
 
 ---
 
@@ -89,7 +89,7 @@ User Input
 | Auth | JWT (access + refresh tokens) + Google/GitHub OAuth |
 | Email | Resend (password resets, schedule notifications) |
 | Monitoring | Sentry (frontend + backend) |
-| Deploy | Vercel (frontend) + Railway (backend) |
+| Deploy | Vercel (frontend) + Render free tier (backend, see `render.yaml`) |
 
 ---
 
@@ -162,13 +162,13 @@ Open [http://localhost:3000](http://localhost:3000)
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
 2. Create an **OAuth 2.0 Client ID** (Web application)
-3. Add authorized redirect URI: `https://YOUR-BACKEND.railway.app/auth/oauth/google/callback`
+3. Add authorized redirect URI: `https://YOUR-BACKEND.onrender.com/auth/oauth/google/callback`
 4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in your backend environment
 
 ### GitHub
 
 1. GitHub Settings → Developer settings → OAuth Apps → **New OAuth App**
-2. Set Authorization callback URL: `https://YOUR-BACKEND.railway.app/auth/oauth/github/callback`
+2. Set Authorization callback URL: `https://YOUR-BACKEND.onrender.com/auth/oauth/github/callback`
 3. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in your backend environment
 
 ---
@@ -196,7 +196,7 @@ Authorization: Bearer <your-api-key>
 
 ```bash
 # Get a completed report
-curl https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report \
+curl https://researchmind-q4fp.onrender.com/api/v1/research/SESSION_ID/report \
   -H "Authorization: Bearer rm_your_key_here"
 ```
 
@@ -205,7 +205,7 @@ import requests
 
 headers = {"Authorization": "Bearer rm_your_key_here"}
 r = requests.get(
-    "https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report",
+    "https://researchmind-q4fp.onrender.com/api/v1/research/SESSION_ID/report",
     headers=headers
 )
 report = r.json()
@@ -214,7 +214,7 @@ print(report["summary"])
 
 ```js
 // From browser console on researchmind-app.vercel.app
-fetch("https://researchmind-production-b6ca.up.railway.app/api/v1/research/SESSION_ID/report", {
+fetch("https://researchmind-q4fp.onrender.com/api/v1/research/SESSION_ID/report", {
   headers: { "Authorization": "Bearer rm_your_key" }
 })
 .then(r => r.json())

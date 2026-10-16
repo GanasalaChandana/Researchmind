@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
+const BACKEND_URL = 'https://researchmind-q4fp.onrender.com';
 
 export interface User {
   id: string;
