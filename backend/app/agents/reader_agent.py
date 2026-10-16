@@ -10,6 +10,10 @@ from ..tools.groq_models import SMART_MODEL, FAST_MODEL
 
 logger = logging.getLogger(__name__)
 
+# Enough for a 3-5 sentence summary; sending the full 8000 chars x 6 sources burns the
+# free-tier per-minute token budget for little benefit.
+_MAX_ARTICLE_CHARS = 3500
+
 
 async def read_sources(sources: list[Source], language: str = "English") -> AsyncGenerator[tuple[AgentEvent, Source], None]:
     client = Groq(api_key=GROQ_API_KEY)
@@ -30,7 +34,7 @@ async def read_sources(sources: list[Source], language: str = "English") -> Asyn
 
 Title: {source.title}
 Content:
-{content}
+{content[:_MAX_ARTICLE_CHARS]}
 
 Return only the summary, no preamble."""
 

@@ -8,7 +8,7 @@ from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph,
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
-from ..tools.text_clean import clean_report_fields
+from ..tools.text_clean import clean_report_fields, clean_text
 from ..config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,9 @@ def rank_usable_sources(sources: list[Source]) -> list[Source]:
     citation verifier and the saved report must all use it (not the raw search
     order), otherwise "[4]" in the text points at the wrong reference.
     """
+    for s in sources:  # normalize LLM/search-snippet typography (shown in the reference list)
+        s.summary = clean_text(s.summary)
+        s.title = clean_text(s.title)
     usable = [s for s in sources if s.summary and not _UNUSABLE_SUMMARY.search(s.summary)]
     if not usable:  # never end up with nothing to cite
         usable = [s for s in sources if s.summary]

@@ -95,7 +95,8 @@ def render_markdown(base: str, rows: list[dict], agg: dict) -> str:
            f"| Duplicate sources | {agg['duplicate_sources_total']} | 0 |",
            f"| Citation numbers out of range | {agg['bad_citation_refs_total']} | 0 |",
            f"| Factual sections with no citation | {agg['uncited_sections_total']} | 0 |",
-           f"| Citations verified by checker | {pct(agg['verified_rate'])} | high |",
+           f"| Citations verified by checker | {pct(agg['verified_rate'])} (verified or partial: {pct(agg['supported_rate'])}) | high |",
+           f"| Topics failed by AI-provider rate limits | {agg['rate_limited_topics']} | 0 |",
            f"| Numbers found in cited sources | {pct(agg['numeric_grounding'])} | high |",
            f"| Garbled characters | {agg['garbled_chars_total']} | 0 |\n",
            "## Per topic\n",
@@ -118,6 +119,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=8)
     ap.add_argument("--depth", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=300, help="seconds per topic")
+    ap.add_argument("--pause", type=int, default=60, help="seconds between topics (Groq free-tier limits are per minute)")
     ap.add_argument("--out", default=str(Path(__file__).parent / "results"))
     args = ap.parse_args()
 
@@ -128,8 +130,15 @@ def main() -> int:
     for i, topic in enumerate(topics, 1):
         print(f"[{i}/{len(topics)}] {topic}", flush=True)
         row = run_topic(base, topic, args.depth, args.timeout)
+        if not row["ok"] and "rate limit" in row.get("error", "").lower():
+            print("   rate limited by the AI provider; waiting 90s and retrying once", flush=True)
+            time.sleep(90)
+            row = run_topic(base, topic, args.depth, args.timeout)
+            row["retried"] = True
         print("   ->", "ok" if row["ok"] else f"FAILED ({row.get('error')})", f"{row['latency_s']}s", flush=True)
         rows.append(row)
+        if i < len(topics):
+            time.sleep(args.pause)
 
     agg = aggregate(rows)
     out = Path(args.out)

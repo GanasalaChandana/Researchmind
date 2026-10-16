@@ -30,7 +30,8 @@ def test_score_report_counts_each_failure_mode():
     assert s["duplicate_sources"] == 1
     assert s["bad_citation_refs"] == 2          # [9] inline and in the citations list
     assert s["uncited_sections"] == 1           # "Outlook"; the gap section is exempt
-    assert s["verifier_total"] == 3 and s["verifier_verified"] == 2
+    assert s["verifier_total"] == 3 and s["verifier_verified"] == 2 and s["verifier_partial"] == 0
+    assert abs(s["supported_rate"] - 2 / 3) < 1e-9
     assert s["numbers_checked"] == 3            # 447,450 / 999 / 39,990 (9 is one digit)
     assert s["numbers_grounded"] == 2           # 999 is not in any cited source
     assert s["garbled_chars"] == 0

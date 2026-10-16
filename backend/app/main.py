@@ -1709,7 +1709,7 @@ async def stream_research(
                 parsed_ids = [d.strip() for d in doc_ids.split(",") if d.strip()]
                 doc_contexts = await get_documents_text(parsed_ids, _user_id_for_docs)
 
-            _PHASE_TIMEOUT = 120  # seconds per agent phase before giving up
+            _PHASE_TIMEOUT = 300  # seconds per agent phase (allows for Groq rate-limit waits)
 
             async def _collect_orchestrate():
                 results = []

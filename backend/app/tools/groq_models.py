@@ -13,7 +13,9 @@ import os
 SMART_MODEL = os.environ.get("GROQ_MODEL_SMART", "openai/gpt-oss-120b")
 FAST_MODEL = os.environ.get("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
 
-REASONING_TOKEN_HEADROOM = 1000
+# Hidden reasoning at low effort is short. Groq also counts max_tokens toward the
+# per-minute token limit, so keep this modest.
+REASONING_TOKEN_HEADROOM = 600
 
 
 def is_reasoning_model(model: str) -> bool:

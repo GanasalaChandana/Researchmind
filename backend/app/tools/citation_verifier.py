@@ -22,7 +22,7 @@ def _build_tasks(sections: list[dict], sources: list) -> list[dict]:
         citations = section.get("citations") or []
         content = section.get("content", "")
         # Truncate content to keep prompt size manageable
-        snippet = content[:400] + ("…" if len(content) > 400 else "")
+        snippet = content[:900] + ("…" if len(content) > 900 else "")
 
         for cite_num in citations:
             # citation numbers are 1-based
@@ -35,7 +35,7 @@ def _build_tasks(sections: list[dict], sources: list) -> list[dict]:
                 "task_id": f"{s_idx}:{cite_num}",
                 "section_snippet": snippet,
                 "source_title": getattr(src, "title", ""),
-                "source_summary": src_summary[:300] + ("…" if len(src_summary) > 300 else ""),
+                "source_summary": src_summary[:1000] + ("…" if len(src_summary) > 1000 else ""),
                 "cite_num": cite_num,
             })
     return tasks

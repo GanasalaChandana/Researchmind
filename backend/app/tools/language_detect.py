@@ -4,6 +4,7 @@ Returns a language name string like "French", "Spanish", "Japanese" etc.
 Falls back to "English" on any error.
 """
 
+import re
 from groq import Groq
 from ..config import GROQ_API_KEY
 from .groq_models import FAST_MODEL, adapt_kwargs
@@ -28,6 +29,11 @@ _NORMALISE = {
 def detect_language(text: str) -> str:
     """Detect the language of *text* and return a full English language name."""
     if not text or not text.strip():
+        return "English"
+
+    # Plain-ASCII topics are English in practice; skip an LLM call (and its tokens)
+    # on every run. Anything with non-ASCII letters still goes to the model.
+    if text.isascii() and not re.search(r"\b(el|la|los|las|der|die|das|und|le|les|des|une|il|che|não|são|pour|está)\b", text.lower()):
         return "English"
 
     try:

@@ -80,8 +80,10 @@ def score_report(report: dict) -> dict:
         "uncited_sections": uncited_sections,
         "verifier_total": v_total,
         "verifier_verified": verdicts["verified"],
+        "verifier_partial": verdicts["partial"],
         "verifier_unverified": verdicts["unverified"],
         "verified_rate": (verdicts["verified"] / v_total) if v_total else None,
+        "supported_rate": ((verdicts["verified"] + verdicts["partial"]) / v_total) if v_total else None,
         "numbers_checked": nums_total,
         "numbers_grounded": nums_grounded,
         "numeric_grounding": (nums_grounded / nums_total) if nums_total else None,
@@ -114,6 +116,9 @@ def aggregate(rows: list[dict]) -> dict:
         "bad_citation_refs_total": sum(r["bad_citation_refs"] for r in ok),
         "uncited_sections_total": sum(r["uncited_sections"] for r in ok),
         "verified_rate": pooled("verifier_verified", "verifier_total"),
+        "supported_rate": (sum(r["verifier_verified"] + r["verifier_partial"] for r in ok) /
+                           sum(r["verifier_total"] for r in ok)) if sum(r["verifier_total"] for r in ok) else None,
+        "rate_limited_topics": sum(1 for r in rows if not r.get("ok") and "rate limit" in r.get("error", "").lower()),
         "numeric_grounding": pooled("numbers_grounded", "numbers_checked"),
         "garbled_chars_total": sum(r["garbled_chars"] for r in ok),
     }

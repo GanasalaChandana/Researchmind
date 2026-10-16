@@ -43,3 +43,25 @@ def test_retry_wrapper_applies_adaptation():
         loop.close()
     assert seen["max_tokens"] == 100 + groq_models.REASONING_TOKEN_HEADROOM
     assert seen["extra_body"]["reasoning_effort"] == "low"
+
+
+def test_retry_delay_follows_groq_hints_and_is_capped():
+    from app.tools.groq_retry import retry_delay, MAX_BACKOFF_S
+
+    class _E(Exception):
+        pass
+
+    assert retry_delay(_E("Rate limit. Please try again in 12.5s."), 0) == 13.5
+    assert retry_delay(_E("Please try again in 1m3.5s"), 0) == MAX_BACKOFF_S       # 64.5s -> capped
+    assert retry_delay(_E("429 too many requests"), 0) == 2.0                       # no hint: exponential
+    assert retry_delay(_E("429 too many requests"), 2) == 8.0
+
+    class _R(_E):
+        response = type("R", (), {"headers": {"retry-after": "20"}})()
+    assert retry_delay(_R("429"), 0) == 21.0
+
+
+def test_ascii_topics_skip_the_language_llm_call(monkeypatch):
+    from app.tools import language_detect
+    monkeypatch.setattr(language_detect, "Groq", lambda **k: (_ for _ in ()).throw(AssertionError("LLM called")))
+    assert language_detect.detect_language("How do solid-state batteries work?") == "English"
