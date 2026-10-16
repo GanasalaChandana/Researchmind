@@ -23,7 +23,14 @@ export async function GET(
   if (modelTier) backendUrl += `&model_tier=${encodeURIComponent(modelTier)}`;
 
   const backendRes = await fetch(backendUrl, {
-    headers: { Accept: "text/event-stream", "Cache-Control": "no-cache" },
+    headers: {
+      Accept: "text/event-stream",
+      "Cache-Control": "no-cache",
+      // Forward the real client IP so backend rate limits apply per user, not per Vercel proxy.
+      ...(req.headers.get("x-forwarded-for")
+        ? { "X-Forwarded-For": req.headers.get("x-forwarded-for")! }
+        : {}),
+    },
   });
 
   // Stream the response directly to the client

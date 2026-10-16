@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from typing import Optional
 import httpx
 
+from .url_safety import is_safe_public_url
+
 # In-memory per-session registry (backward compat with public API)
 _webhooks: dict[str, list[dict]] = {}
 
@@ -101,9 +103,14 @@ async def _post_once(
         "X-ResearchMind-Signed-With": "custom" if webhook.get("secret") else "server",
     }
 
+    # SSRF guard: never deliver to loopback/private/metadata addresses.
+    if not await is_safe_public_url(webhook["url"]):
+        return False, None, "blocked: webhook URL does not resolve to a public address", 0
+
     t0 = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        # follow_redirects stays off so a public URL can't bounce us to an internal one.
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             resp = await client.post(webhook["url"], content=body, headers=headers)
         dur = int((time.monotonic() - t0) * 1000)
         ok = 200 <= resp.status_code < 300

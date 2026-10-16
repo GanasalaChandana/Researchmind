@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const auth = req.headers.get("Authorization");
   if (auth) headers["Authorization"] = auth;
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) headers["X-Forwarded-For"] = fwd;
 
   try {
     const res = await fetch(`${BACKEND}/research/start`, {
