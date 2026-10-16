@@ -8,6 +8,7 @@ from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph,
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
+from ..tools.text_clean import clean_report_fields
 from ..config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdow
         match = re.search(r"\{.*\}", kg_raw, re.DOTALL)
         kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
 
+    clean_report_fields({}, kg_data)
     kg = KnowledgeGraph(
         entities=[Entity(**e) for e in kg_data.get("entities", [])],
         relationships=[Relationship(**r) for r in kg_data.get("relationships", [])],
@@ -134,6 +136,13 @@ Return a JSON object:
   ]
 }}
 
+Grounding rules (important):
+- Use ONLY facts, figures and dates that appear in the numbered sources above. Do not add numbers, product specs, company names or forecasts from your own knowledge.
+- Ignore words that only appear inside URLs; they are not evidence.
+- Every sentence with a factual claim must be supported by the source you cite for it. Never cite a source for something it does not say.
+- If the sources do not cover part of a sub-question, say plainly that the sources do not cover it instead of guessing. Label analysis or recommendations as such ("Analysis:").
+- Use plain ASCII punctuation: regular spaces and hyphens only.
+
 Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
 
     report_response = await groq_with_retry(
@@ -150,6 +159,7 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
         match = re.search(r"\{.*\}", report_raw, re.DOTALL)
         report_data = json.loads(match.group()) if match else {"summary": "", "sections": []}
 
+    clean_report_fields(report_data, {})
     sections = report_data.get("sections", [])
 
     # Step 3: Verify citations

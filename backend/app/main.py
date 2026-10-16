@@ -567,7 +567,8 @@ async def _run_pipeline_bg(
         top_src = sorted(all_sources, key=lambda s: s.relevance_score, reverse=True)[:6]
         enriched: list = []
         async for _ev, source in read_sources(top_src, language=language):
-            enriched.append(source)
+            if not any(s.url == source.url for s in enriched):
+                enriched.append(source)
 
         # ④ Synthesize
         report_dict = None
@@ -1774,7 +1775,10 @@ async def stream_research(
                 _collect_read(top_sources), timeout=_PHASE_TIMEOUT
             )
             for event, source in read_results:
-                enriched_sources.append(source)
+                # read_sources yields each source twice (reading + summarized) —
+                # keep one copy so the report doesn't list/cite every source twice.
+                if not any(s.url == source.url for s in enriched_sources):
+                    enriched_sources.append(source)
                 yield {"data": event.model_dump_json()}
                 await asyncio.sleep(0)
 

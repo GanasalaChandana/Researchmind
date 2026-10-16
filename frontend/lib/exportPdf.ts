@@ -5,6 +5,16 @@ const DARK_RGB:  [number, number, number] = [15,  17,  23];
 const MUTED_RGB: [number, number, number] = [100, 116, 139];
 const SECTION_BG: [number, number, number] = [238, 242, 255]; // indigo-50
 
+// jsPDF's built-in fonts can't render narrow no-break spaces, non-breaking hyphens,
+// arrows etc. (they showed up as "600 /L", "0 60 /mph"). Normalize before drawing.
+const pdfSafe = (t: string | undefined | null): string =>
+  (t ?? "")
+    .replace(/[\u200b-\u200d\u2060\ufeff]/g, "")
+    .replace(/[\u00a0\u2002-\u200a\u202f\u205f\u3000]/g, " ")
+    .replace(/[\u2010\u2011\u2012\u2212]/g, "-")
+    .replace(/\u2192/g, "->").replace(/\u2190/g, "<-")
+    .replace(/\u2265/g, ">=").replace(/\u2264/g, "<=").replace(/\u2248/g, "~");
+
 export async function exportToPdf(report: ResearchReport): Promise<void> {
   const { jsPDF } = await import("jspdf");
 
@@ -34,7 +44,7 @@ export async function exportToPdf(report: ResearchReport): Promise<void> {
     doc.setFontSize(fontSize);
     doc.setTextColor(...color);
     doc.setFont("helvetica", bold && italic ? "bolditalic" : bold ? "bold" : italic ? "italic" : "normal");
-    const lines = doc.splitTextToSize(text, maxWidth);
+    const lines = doc.splitTextToSize(pdfSafe(text), maxWidth);
     const lineH = fontSize * 0.42;
     checkPage(lines.length * lineH + 3);
     doc.text(lines, margin + indent, y);
@@ -56,7 +66,7 @@ export async function exportToPdf(report: ResearchReport): Promise<void> {
     doc.setFontSize(11);
     doc.setTextColor(...BRAND_RGB);
     doc.setFont("helvetica", "bold");
-    const label = num !== undefined ? `${num}.  ${title}` : title;
+    const label = pdfSafe(num !== undefined ? `${num}.  ${title}` : title);
     doc.text(label, margin + 3, y + 5);
     y += 11;
   };
@@ -158,7 +168,7 @@ export async function exportToPdf(report: ResearchReport): Promise<void> {
     const titleText = src.title || "Untitled";
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...DARK_RGB);
-    const titleLines = doc.splitTextToSize(titleText, contentW - 12);
+    const titleLines = doc.splitTextToSize(pdfSafe(titleText), contentW - 12);
     doc.text(titleLines, margin + 12, y);
     y += titleLines.length * (9 * 0.42) + 2;
 
@@ -171,7 +181,7 @@ export async function exportToPdf(report: ResearchReport): Promise<void> {
 
     if (src.summary) {
       doc.setTextColor(...MUTED_RGB);
-      const sumLines = doc.splitTextToSize(src.summary, contentW - 12);
+      const sumLines = doc.splitTextToSize(pdfSafe(src.summary), contentW - 12);
       checkPage(sumLines.length * (8 * 0.42) + 2);
       doc.text(sumLines, margin + 12, y);
       y += sumLines.length * (8 * 0.42) + 1;
