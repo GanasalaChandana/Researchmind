@@ -13,6 +13,7 @@ import asyncio
 import logging
 
 from .circuit_breaker import groq_breaker
+from .groq_models import adapt_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def groq_with_retry(client, max_retries: int = 3, **kwargs):
     opens after 5 consecutive failures and recovers after 60s; while open this
     raises CircuitBreakerOpen without contacting Groq.
     """
+    kwargs = adapt_kwargs(kwargs)
     async with groq_breaker:
         for attempt in range(max_retries):
             try:

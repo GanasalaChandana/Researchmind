@@ -12,6 +12,7 @@ import json
 import re
 from groq import Groq
 from ..config import GROQ_API_KEY
+from .groq_models import FAST_MODEL, adapt_kwargs
 
 
 def _build_tasks(sections: list[dict], sources: list) -> list[dict]:
@@ -77,12 +78,12 @@ Return only valid JSON. No markdown fences."""
 
     try:
         client = Groq(api_key=GROQ_API_KEY)
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+        response = client.chat.completions.create(**adapt_kwargs(dict(
+            model=FAST_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1000,
             temperature=0.1,
-        )
+        )))
         raw = response.choices[0].message.content.strip()
 
         # Parse JSON — handle potential markdown fences

@@ -7,15 +7,16 @@ from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
+from ..tools.groq_models import SMART_MODEL, FAST_MODEL
 from ..config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
 
 
 GROQ_MODELS = {
-    "fast":     "llama-3.1-8b-instant",
-    "balanced": "llama-3.3-70b-versatile",
-    "deep":     "llama-3.3-70b-versatile",  # same model, higher max_tokens
+    "fast":     FAST_MODEL,
+    "balanced": SMART_MODEL,
+    "deep":     SMART_MODEL,  # same model, higher max_tokens
 }
 
 
