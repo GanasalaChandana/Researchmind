@@ -10,7 +10,9 @@ from typing import Optional
 from jose import JWTError, jwt
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SECRET_KEY = os.getenv("JWT_SECRET_KEY") or "researchmind-super-secret-change-in-production"
+# Single source of truth lives in config.py (which also refuses to boot in production
+# with the default secret).
+from ..config import JWT_SECRET_KEY as SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24       # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 30              # 30 days

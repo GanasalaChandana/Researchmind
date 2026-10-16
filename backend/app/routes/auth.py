@@ -36,6 +36,10 @@ from ..tools.email import email_configured, send_password_reset_email
 
 # Rate limiting
 from ..tools.rate_limit import check_rate_limit, clear_rate_limit
+from ..config import ALLOW_DEV_RESET_TOKEN
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -267,8 +271,9 @@ async def forgot_password(body: ForgotPassword, request: Request):
 
     Always returns success (even if email doesn't exist) to avoid leaking which
     emails are registered. If email delivery (Resend) is configured, the reset
-    code is emailed and NOT returned in the response. If not configured, the token
-    is returned directly as a development fallback.
+    code is emailed and NOT returned in the response. The token is only ever returned
+    in the response when ALLOW_DEV_RESET_TOKEN=true (local development only) — never
+    enable that in production, it would let anyone reset any account's password.
     """
     # Anti-abuse: max 5 reset requests per IP per 15 minutes
     check_rate_limit(request, bucket="forgot", max_attempts=5, window_seconds=900)
@@ -289,13 +294,13 @@ async def forgot_password(body: ForgotPassword, request: Request):
     if email_configured():
         # Email the reset code/link; do NOT expose the token in the response.
         sent = await send_password_reset_email(user["email"], user.get("name", ""), raw_token)
-        if sent:
-            return generic
-        # Fall through to returning the token if the email send failed, so the
-        # user isn't completely blocked.
+        if not sent:
+            logger.error("Password reset email failed to send for user %s", user["id"])
 
-    # Dev fallback (no email provider configured, or send failed)
-    return {**generic, "reset_token": raw_token, "expires_in": RESET_TOKEN_EXPIRE_MINUTES * 60}
+    # Local-dev escape hatch only (explicit opt-in).
+    if ALLOW_DEV_RESET_TOKEN:
+        return {**generic, "reset_token": raw_token, "expires_in": RESET_TOKEN_EXPIRE_MINUTES * 60}
+    return generic
 
 
 # ── Reset Password ────────────────────────────────────────────────────────────

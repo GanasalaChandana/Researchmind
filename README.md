@@ -49,7 +49,7 @@ User Input
                ▼
 ┌─────────────────────────────────────────┐
 │            Search Agent                 │
-│  DuckDuckGo searches each sub-question  │
+│  Tavily searches each sub-question      │
 │  Deduplicates and ranks sources         │
 └──────────────┬──────────────────────────┘
                │
@@ -120,6 +120,8 @@ FRONTEND_URL=http://localhost:3000
 BACKEND_URL=http://localhost:8000
 
 # Optional
+RESEND_API_KEY=re_...              # needed in production for password-reset emails
+ALLOW_DEV_RESET_TOKEN=true         # local dev only: returns reset token in API response
 REDIS_URL=rediss://...             # Upstash Redis
 RESEND_API_KEY=re_...              # Email notifications
 SENTRY_DSN=https://...             # Error tracking
