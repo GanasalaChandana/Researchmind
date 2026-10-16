@@ -824,8 +824,19 @@ async def prometheus_metrics():
 
 @app.get("/health")
 async def health():
-    """Health check — 200 when healthy or DB not configured, 503 when DB is
-    configured but unreachable (pool failed to connect)."""
+    """Liveness probe — always 200 while the process is up, so a paused/unreachable
+    database (e.g. an inactive Supabase free project) can't fail the platform
+    healthcheck and take the whole API down. DB state is reported in the body."""
+    return await _health_payload(strict=False)
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness probe — 503 when the DB is configured but unreachable."""
+    return await _health_payload(strict=True)
+
+
+async def _health_payload(strict: bool):
     from fastapi.responses import JSONResponse as _JSONResponse
     db_url_set = bool(os.environ.get("DATABASE_URL"))
     db_ok = not db_url_set  # default: ok when no DB is expected
@@ -850,7 +861,7 @@ async def health():
             },
         },
     }
-    return _JSONResponse(payload, status_code=200 if db_ok else 503)
+    return _JSONResponse(payload, status_code=200 if (db_ok or not strict) else 503)
 
 
 # ---------------------------------------------------------------------------
