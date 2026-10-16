@@ -4,7 +4,7 @@
 
 The ResearchMind Public API allows developers to integrate AI-powered research capabilities into their applications. All API endpoints require authentication via API keys.
 
-**Base URL:** `https://researchmind-production-b6ca.up.railway.app/api/v1`
+**Base URL:** `https://researchmind-q4fp.onrender.com/api/v1`
 
 ## Authentication
 
@@ -12,7 +12,7 @@ All API requests must include an `Authorization` header with a bearer token:
 
 ```bash
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-  https://researchmind-production-b6ca.up.railway.app/api/v1/research/start
+  https://researchmind-q4fp.onrender.com/api/v1/research/start
 ```
 
 ## Rate Limiting
@@ -196,7 +196,7 @@ import requests
 import time
 
 API_KEY = "rm_your_api_key_here"
-BASE_URL = "https://researchmind-production-b6ca.up.railway.app/api/v1"
+BASE_URL = "https://researchmind-q4fp.onrender.com/api/v1"
 
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
@@ -236,7 +236,7 @@ report = get_report(session_id)
 const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://researchmind-production-b6ca.up.railway.app/api/v1',
+  baseURL: 'https://researchmind-q4fp.onrender.com/api/v1',
   headers: { Authorization: 'Bearer rm_your_api_key_here' }
 });
 

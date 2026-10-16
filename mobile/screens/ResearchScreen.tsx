@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
+const BACKEND_URL = 'https://researchmind-q4fp.onrender.com';
 
 export default function ResearchScreen({ route, navigation }: any) {
   const { sessionId } = route.params || {};

@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
-const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
+const BACKEND_URL = 'https://researchmind-q4fp.onrender.com';
 
 const EXAMPLE_TOPICS = [
   'Impact of AI on drug discovery',

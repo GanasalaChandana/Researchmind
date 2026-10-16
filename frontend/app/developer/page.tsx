@@ -10,7 +10,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
-// Call the Railway backend directly — bypasses Next.js proxy entirely.
+// Call the backend directly — bypasses Next.js proxy entirely.
 // CORS is already configured on the backend to allow researchmind*.vercel.app.
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
@@ -95,7 +95,7 @@ function CopyButton({ text }: { text: string }) {
 const CODE_EXAMPLES = [
   {
     lang: "cURL",
-    code: (key: string) => `curl https://your-backend.railway.app/api/v1/research/{session_id}/report \\
+    code: (key: string) => `curl https://your-backend.onrender.com/api/v1/research/{session_id}/report \\
   -H "Authorization: Bearer ${key}"`,
   },
   {
@@ -104,7 +104,7 @@ const CODE_EXAMPLES = [
 
 headers = {"Authorization": "Bearer ${key}"}
 r = requests.get(
-    "https://your-backend.railway.app/api/v1/research/{session_id}/report",
+    "https://your-backend.onrender.com/api/v1/research/{session_id}/report",
     headers=headers
 )
 print(r.json())`,
@@ -112,7 +112,7 @@ print(r.json())`,
   {
     lang: "JavaScript",
     code: (key: string) => `const res = await fetch(
-  "https://your-backend.railway.app/api/v1/research/{session_id}/report",
+  "https://your-backend.onrender.com/api/v1/research/{session_id}/report",
   { headers: { Authorization: "Bearer ${key}" } }
 );
 const data = await res.json();`,

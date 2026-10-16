@@ -15,8 +15,8 @@ JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or _JWT_DEFAULT
 # Local-dev only: return password-reset tokens in the API response instead of emailing.
 ALLOW_DEV_RESET_TOKEN = os.environ.get("ALLOW_DEV_RESET_TOKEN", "").lower() in ("1", "true", "yes")
 
-# Treat Railway (or an explicit ENV/APP_ENV=production) as production.
-IS_PRODUCTION = bool(os.environ.get("RAILWAY_ENVIRONMENT")) or \
+# Treat Railway/Render (or an explicit ENV/APP_ENV=production) as production.
+IS_PRODUCTION = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER")) or \
     os.environ.get("ENV", os.environ.get("APP_ENV", "")).lower() == "production"
 
 # Email delivery (Resend) — optional. If unset, reset codes are returned in the API
