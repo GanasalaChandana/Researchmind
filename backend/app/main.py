@@ -58,6 +58,7 @@ from .database import (
 from .tools.auto_tagger import extract_tags
 from .tools.error_handler import friendly_error
 from .tools.rate_limit import check_rate_limit
+from .tools.groq_models import SMART_MODEL, FAST_MODEL, adapt_kwargs
 from .tools.language_detect import detect_language
 from .tools.export_formats import export_markdown, export_html, format_citations
 from .tools.pdf_export import generate_report_pdf
@@ -360,12 +361,12 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
 
     def _call_groq() -> list[str]:
         client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        response = client.chat.completions.create(**adapt_kwargs(dict(
+            model=SMART_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=80,
             temperature=0.3,
-        )
+        )))
         raw = response.choices[0].message.content.strip()
         tags = [t.strip().lower() for t in raw.split(",") if t.strip()]
         # Keep only reasonably-sized tags; drop anything too long or empty
@@ -405,12 +406,12 @@ async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict)
     def _call() -> list[str]:
         import json as _j
         client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        resp = client.chat.completions.create(**adapt_kwargs(dict(
+            model=SMART_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,
-        )
+        )))
         raw = resp.choices[0].message.content.strip()
         # Strip markdown code fences if present
         if raw.startswith("```"):
@@ -642,12 +643,12 @@ async def _suggest_chain_topics(topic: str, summary: str) -> list[str]:
     loop = asyncio.get_event_loop()
     def _call():
         client = _GroqClient(api_key=GROQ_API_KEY)
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        resp = client.chat.completions.create(**adapt_kwargs(dict(
+            model=SMART_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=200,
-        )
+        )))
         return resp.choices[0].message.content.strip()
     try:
         raw = await loop.run_in_executor(None, _call)
@@ -1103,12 +1104,12 @@ async def suggest_queries(q: str = Query(default="", max_length=200)):
     def _call() -> list[str]:
         import json as _j
         client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        resp = client.chat.completions.create(**adapt_kwargs(dict(
+            model=SMART_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.7,
-        )
+        )))
         raw = resp.choices[0].message.content.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -1500,13 +1501,13 @@ async def chat_with_report(
             """Blocking Groq stream — runs in thread executor."""
             try:
                 client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
-                stream = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                stream = client.chat.completions.create(**adapt_kwargs(dict(
+                    model=SMART_MODEL,
                     messages=llm_msgs,
                     max_tokens=900,
                     temperature=0.4,
                     stream=True,
-                )
+                )))
                 for chunk in stream:
                     text = (chunk.choices[0].delta.content or "")
                     if text:

@@ -6,6 +6,7 @@ from ..tools.url_reader import read_url
 from ..tools.source_scorer import score_source
 from ..config import GROQ_API_KEY
 from ..tools.groq_retry import groq_with_retry
+from ..tools.groq_models import SMART_MODEL, FAST_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ Return only the summary, no preamble."""
             try:
                 response = await groq_with_retry(
                     client,
-                    model="llama-3.1-8b-instant",
+                    model=FAST_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300,
                     temperature=0.2,

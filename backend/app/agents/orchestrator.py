@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 from ..models.schemas import AgentEvent
 from ..config import GROQ_API_KEY
 from ..tools.groq_retry import groq_with_retry
+from ..tools.groq_models import SMART_MODEL, FAST_MODEL
 
 
 async def orchestrate(topic: str, depth: int, language: str = "English") -> AsyncGenerator[AgentEvent, None]:
@@ -36,7 +37,7 @@ Return only valid JSON, no markdown fences."""
 
     response = await groq_with_retry(
         client,
-        model="llama-3.3-70b-versatile",
+        model=SMART_MODEL,
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
