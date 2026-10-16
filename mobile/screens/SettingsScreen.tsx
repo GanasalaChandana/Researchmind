@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
-const BACKEND_URL = 'https://researchmind-production-b6ca.up.railway.app';
+const BACKEND_URL = 'https://researchmind-q4fp.onrender.com';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();

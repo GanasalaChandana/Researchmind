@@ -1,0 +1,39 @@
+# Render Blueprint — deploys the FastAPI backend on Render's free web tier.
+# Dashboard → New → Blueprint → select this repo. Secrets marked sync:false are
+# prompted for on first deploy.
+#
+# Free-tier notes: the service sleeps after ~15 min idle (first request after
+# that takes ~30-60s to wake) and has no persistent disk — all state lives in
+# Postgres (Supabase) / Redis (Upstash).
+services:
+  - type: web
+    name: researchmind-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: ENV
+        value: production          # makes the app refuse to boot without JWT_SECRET_KEY
+      - key: JWT_SECRET_KEY
+        generateValue: true        # Render creates a strong random value for you
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: DATABASE_URL        # Supabase connection string (use the pooler URL)
+        sync: false
+      - key: FRONTEND_URL
+        value: https://researchmind-app.vercel.app
+      - key: RESEND_API_KEY      # needed for password-reset emails
+        sync: false
+      - key: REDIS_URL           # optional (Upstash)
+        sync: false
+      - key: SENTRY_DSN          # optional
+        sync: false

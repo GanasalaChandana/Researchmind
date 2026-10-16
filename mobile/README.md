@@ -71,7 +71,7 @@ mobile/
 The mobile app connects to the ResearchMind backend API:
 
 ```
-https://researchmind-production-b6ca.up.railway.app
+https://researchmind-q4fp.onrender.com
 ```
 
 ### API Endpoints Used
