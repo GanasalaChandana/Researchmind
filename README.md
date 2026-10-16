@@ -5,7 +5,7 @@
 > Enter any topic → 4 specialized AI agents coordinate in real-time → streaming UI shows every reasoning step → outputs a structured report + interactive knowledge graph + REST API access.
 
 🔗 **Live App:** [researchmind-app.vercel.app](https://researchmind-app.vercel.app)  
-🔗 **Backend API:** [researchmind-production-b6ca.up.railway.app](https://researchmind-production-b6ca.up.railway.app)
+🔗 **Backend API:** hosted on Render (free tier — first request after idle takes ~30–60s to wake)
 
 ---
 
@@ -89,7 +89,7 @@ User Input
 | Auth | JWT (access + refresh tokens) + Google/GitHub OAuth |
 | Email | Resend (password resets, schedule notifications) |
 | Monitoring | Sentry (frontend + backend) |
-| Deploy | Vercel (frontend) + Railway (backend) |
+| Deploy | Vercel (frontend) + Render free tier (backend, see `render.yaml`) |
 
 ---
 

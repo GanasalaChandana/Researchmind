@@ -122,3 +122,16 @@ def test_groq_retry_honours_open_circuit(monkeypatch):
         with pytest.raises(CircuitBreakerOpen):
             await groq_retry.groq_with_retry(_Client(), model="m", messages=[])
     _run(run())
+
+
+def test_health_is_liveness_only_and_ready_is_strict(client, monkeypatch):
+    """A broken DB must not fail /health (platform healthcheck), only /health/ready."""
+    from app import main
+
+    async def boom():
+        raise RuntimeError("db paused")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.setattr(main, "get_pool", boom)
+    live = client.get("/health")
+    assert live.status_code == 200 and live.json()["status"] == "degraded"
+    assert client.get("/health/ready").status_code == 503
