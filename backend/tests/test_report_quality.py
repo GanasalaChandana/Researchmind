@@ -21,3 +21,7 @@ def test_clean_report_fields_covers_summary_sections_and_graph():
     assert report["summary"] == "a b"
     assert report["sections"][0] == {"heading": "x-y", "content": "1 kN", "citations": [1]}
     assert kg["entities"][0]["name"] == "10 thrusters" and kg["relationships"][0]["label"] == "a b"
+
+
+def test_subscript_digits_become_plain_digits():
+    assert clean_text("2 kg CO₂e per kg") == "2 kg CO2e per kg"

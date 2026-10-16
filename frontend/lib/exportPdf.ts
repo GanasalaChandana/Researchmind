@@ -13,6 +13,7 @@ const pdfSafe = (t: string | undefined | null): string =>
     .replace(/[\u00a0\u2002-\u200a\u202f\u205f\u3000]/g, " ")
     .replace(/[\u2010\u2011\u2012\u2212]/g, "-")
     .replace(/\u2192/g, "->").replace(/\u2190/g, "<-")
+    .replace(/[\u2080-\u2089]/g, (c) => String(c.charCodeAt(0) - 0x2080))
     .replace(/\u2265/g, ">=").replace(/\u2264/g, "<=").replace(/\u2248/g, "~");
 
 export async function exportToPdf(report: ResearchReport): Promise<void> {

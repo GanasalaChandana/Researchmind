@@ -574,15 +574,8 @@ async def _run_pipeline_bg(
         report_dict = None
         async for _ev, report in synthesize(topic, session_id, enriched, sub_questions, language=language):
             if report:
-                seen: set = set()
-                unique: list = []
-                for s in enriched:
-                    t = s.title.lower().strip() if hasattr(s, "title") else ""
-                    if t not in seen:
-                        unique.append(s)
-                        seen.add(t)
+                # report.sources already matches the [n] citation numbering; keep as is.
                 report_dict = report.model_dump()
-                report_dict["sources"] = [s.model_dump() for s in unique]
 
         if report_dict:
             await _update(session_id, "completed", report_dict)
@@ -1789,19 +1782,9 @@ async def stream_research(
             )
             for event, report in synth_results:
                 if report:
-                    # Deduplicate sources by title before saving (final safety check)
-                    seen_titles = set()
-                    unique_sources = []
-                    for s in enriched_sources:
-                        title_lower = s.title.lower().strip() if hasattr(s, 'title') else ""
-                        if title_lower not in seen_titles:
-                            unique_sources.append(s)
-                            seen_titles.add(title_lower)
-                    # Sort final source list by quality score (highest first)
-                    unique_sources.sort(
-                        key=lambda s: s.quality_score if hasattr(s, "quality_score") else 0,
-                        reverse=True,
-                    )
+                    # report.sources is already deduplicated and ordered to match the
+                    # [n] citation numbers in the text — never re-sort or re-filter it.
+                    unique_sources = list(report.sources)
 
                     # Ensure sources are included when saving
                     report_dict = report.model_dump()

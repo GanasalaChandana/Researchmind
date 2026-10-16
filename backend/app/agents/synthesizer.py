@@ -21,6 +21,25 @@ GROQ_MODELS = {
 }
 
 
+_UNUSABLE_SUMMARY = re.compile(
+    r"no substantive information|unable to fetch full content|generic youtube interface",
+    re.IGNORECASE,
+)
+
+
+def rank_usable_sources(sources: list[Source]) -> list[Source]:
+    """Sources the report may cite, in the exact order they are numbered [1], [2], ...
+
+    This list is the single source of truth for citation numbers: the prompt, the
+    citation verifier and the saved report must all use it (not the raw search
+    order), otherwise "[4]" in the text points at the wrong reference.
+    """
+    usable = [s for s in sources if s.summary and not _UNUSABLE_SUMMARY.search(s.summary)]
+    if not usable:  # never end up with nothing to cite
+        usable = [s for s in sources if s.summary]
+    return sorted(usable, key=lambda s: s.quality_score, reverse=True)
+
+
 async def synthesize(
     topic: str,
     session_id: str,
@@ -40,12 +59,10 @@ async def synthesize(
         message="Building knowledge graph from extracted entities...",
     ), None
 
-    # Sort by quality score so highest-authority sources are cited first
-    ranked_sources = sorted(
-        [s for s in sources if s.summary],
-        key=lambda s: s.quality_score,
-        reverse=True,
-    )
+    # Sort by quality score so highest-authority sources are cited first.
+    # Drop sources with no usable content (failed fetches, bare video pages): they
+    # waste prompt space and just invite fabricated citations.
+    ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
         f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\n{s.summary}"
@@ -169,7 +186,7 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
         message="Verifying citations against sources…",
     ), None
 
-    citation_checks = await verify_citations(sections, sources)
+    citation_checks = await verify_citations(sections, ranked_sources)
 
     # Inject verification results into each section
     for s_idx, section in enumerate(sections):
@@ -185,7 +202,7 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
         topic=topic,
         summary=report_data.get("summary", ""),
         sections=sections,
-        sources=sources,
+        sources=ranked_sources,
         knowledge_graph=kg,
     )
 

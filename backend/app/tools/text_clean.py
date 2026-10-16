@@ -12,7 +12,8 @@ _HYPHENS = re.compile("[‐‑‒−]")
 _ZERO_WIDTH = re.compile("[​-‍⁠﻿]")
 _REPLACEMENTS = {
     "→": "->", "←": "<-", "≥": ">=", "≤": "<=", "≈": "~",
-    "≠": "!=", "•": "-", "…": "...",
+    "≠": "!=",
+    **{chr(0x2080 + i): str(i) for i in range(10)},  # subscript digits, e.g. CO₂e "•": "-", "…": "...",
 }
 
 
