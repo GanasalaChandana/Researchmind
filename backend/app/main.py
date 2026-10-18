@@ -344,7 +344,7 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
     Runs the synchronous Groq client in a thread-pool executor so it doesn't
     block the event loop. Tags are persisted via add_tag() in the database.
     """
-    if not user_id:
+    if not user_id or not _first_time("autotag", session_id):
         return  # Only tag authenticated sessions (tags are user-scoped)
 
     summary = (report_dict.get("summary") or "")[:600]
@@ -364,7 +364,7 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
     def _call_groq() -> list[str]:
         client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
         response = client.chat.completions.create(**adapt_kwargs(dict(
-            model=SMART_MODEL,
+            model=FAST_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=80,
             temperature=0.3,
@@ -390,9 +390,24 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
 
 # ─── Key takeaways extraction ────────────────────────────────────────────────
 
+_BG_ONCE: set[tuple[str, str]] = set()
+
+
+def _first_time(job: str, session_id: str) -> bool:
+    """True the first time (job, session) is seen. Completion paths schedule the same
+    background Groq job more than once; each extra run wastes quota."""
+    key = (job, session_id)
+    if key in _BG_ONCE:
+        return False
+    if len(_BG_ONCE) > 5000:
+        _BG_ONCE.clear()
+    _BG_ONCE.add(key)
+    return True
+
+
 async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict) -> None:
     """Use Groq to extract 3-5 key takeaways and patch them into the stored report."""
-    if report_dict.get("key_takeaways"):
+    if report_dict.get("key_takeaways") or not _first_time("takeaways", session_id):
         return
     summary = (report_dict.get("summary") or "")[:800]
     sections = report_dict.get("sections") or []
@@ -411,7 +426,7 @@ async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict)
         import json as _j
         client = _GroqClient(api_key=os.environ.get("GROQ_API_KEY", ""))
         resp = client.chat.completions.create(**adapt_kwargs(dict(
-            model=SMART_MODEL,
+            model=FAST_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,

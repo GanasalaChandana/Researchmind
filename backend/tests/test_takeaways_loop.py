@@ -38,3 +38,9 @@ def test_update_with_snapshot_false_schedules_nothing(monkeypatch):
 def test_takeaways_skipped_when_already_present():
     # Returns before any Groq call (would fail without an API key if it didn't).
     assert _run(main._extract_key_takeaways("sid", "t", {"key_takeaways": ["done"]})) is None
+
+
+def test_background_jobs_run_once_per_session():
+    assert main._first_time("takeaways", "dedupe-sid") is True
+    assert main._first_time("takeaways", "dedupe-sid") is False
+    assert main._first_time("autotag", "dedupe-sid") is True
