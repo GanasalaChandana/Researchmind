@@ -1910,7 +1910,7 @@ async def save_report_version(session_id: str, report: dict) -> dict:
                      SELECT id FROM report_versions WHERE session_id=$1
                      ORDER BY version DESC LIMIT 10
                    )""",
-                session_id, session_id,
+                session_id,
             )
             return {"id": vid, "session_id": session_id, "version": version_num, "created_at": now}
         except Exception as exc:

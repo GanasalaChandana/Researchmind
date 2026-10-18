@@ -290,7 +290,7 @@ async def _set_favorite(session_id: str, is_favorite: bool):
         logger.warning("DB favorite update failed for %s: %s", session_id[:8], exc)
 
 
-async def _update(session_id: str, status: str, report=None):
+async def _update(session_id: str, status: str, report=None, snapshot: bool = True):
     if session_id in _mem:
         _mem[session_id]["status"] = status
         if report:
@@ -300,7 +300,9 @@ async def _update(session_id: str, status: str, report=None):
     except Exception as exc:
         logger.warning("DB update failed for session %s, using memory fallback: %s", session_id[:8], exc)
     # Snapshot completed report as a new version and auto-tag
-    if status == "completed" and report:
+    # snapshot=False is for follow-up patches (e.g. key takeaways). Without it, patching
+    # re-triggers takeaway extraction, which patches again: an endless Groq-call loop.
+    if snapshot and status == "completed" and report:
         report_dict = report if isinstance(report, dict) else json.loads(report)
         _bg_task(save_report_version(session_id, report_dict))
         sess = _mem.get(session_id, {})
@@ -390,6 +392,8 @@ async def _auto_tag_session(session_id: str, topic: str, report_dict: dict, user
 
 async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict) -> None:
     """Use Groq to extract 3-5 key takeaways and patch them into the stored report."""
+    if report_dict.get("key_takeaways"):
+        return
     summary = (report_dict.get("summary") or "")[:800]
     sections = report_dict.get("sections") or []
     section_text = "\n".join(
@@ -431,7 +435,7 @@ async def _extract_key_takeaways(session_id: str, topic: str, report_dict: dict)
         if session and session.get("report"):
             stored = session["report"] if isinstance(session["report"], dict) else json.loads(session["report"])
             stored["key_takeaways"] = takeaways
-            await _update(session_id, "completed", stored)
+            await _update(session_id, "completed", stored, snapshot=False)
         logger.info("Key takeaways extracted for %s: %d items", session_id[:8], len(takeaways))
     except Exception as e:
         logger.warning("Key takeaways failed for %s: %s", session_id[:8], e)
