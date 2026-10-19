@@ -94,3 +94,18 @@ def test_cached_reports_from_older_pipeline_are_ignored():
     assert not _is_current({"summary": "old cached report"})
     assert not _is_current({"pipeline_version": PIPELINE_VERSION - 1})
     assert not _is_current(None)
+
+
+def test_promotional_summary_detected_and_dropped():
+    from app.agents.synthesizer import is_promotional, rank_usable_sources
+    promo = ("Auxiliobits is a technology firm that specializes in autonomous AI agents, offering services such as "
+             "consulting and process automation. The company provides engagement models and promotes tools like an "
+             "ROI Calculator. It also offers educational resources (whitepapers, webinars, podcasts) and a free AI consultation.")
+    real = "AI governance reduces incidents and boosts stakeholder confidence in security and compliance."
+    assert is_promotional(promo) and not is_promotional(real)
+    srcs = [S(title=f"t{i}", url=f"https://example{i}.com/a", summary=real + f" extra {i}", quality_score=50.0) for i in range(3)]
+    srcs.append(S(title="promo", url="https://auxiliobits.com/x", summary=promo, quality_score=90.0))
+    kept = rank_usable_sources(srcs)
+    assert all(k.title != "promo" for k in kept) and len(kept) == 3
+    # with too few real sources the promo page is kept rather than leaving nothing to cite
+    assert len(rank_usable_sources(srcs[2:])) == 2

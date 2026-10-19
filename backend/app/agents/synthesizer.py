@@ -30,6 +30,20 @@ _UNUSABLE_SUMMARY = re.compile(
 )
 
 
+# A summary that mostly describes what a company sells (services, consultations,
+# whitepapers...) says nothing about the topic, and invites made-up citations.
+_PROMO = re.compile(
+    r"specializes in|offers? (?:services|a free|free)|offering services|consult(?:ing|ation)|"
+    r"engagement models|promotes|whitepapers|webinars|podcasts|book a demo|contact (?:us|the firm)|"
+    r"free (?:ai )?(?:consultation|assessment|trial)|roi calculator|our (?:services|solutions|team)",
+    re.IGNORECASE,
+)
+
+
+def is_promotional(summary: str) -> bool:
+    return len(_PROMO.findall(summary or "")) >= 3
+
+
 def rank_usable_sources(sources: list[Source]) -> list[Source]:
     """Sources the report may cite, in the exact order they are numbered [1], [2], ...
 
@@ -43,8 +57,8 @@ def rank_usable_sources(sources: list[Source]) -> list[Source]:
     usable = [s for s in sources if s.summary and not _UNUSABLE_SUMMARY.search(s.summary)]
     if not usable:  # never end up with nothing to cite
         usable = [s for s in sources if s.summary]
-    # Social posts are not evidence: drop them whenever enough other sources remain.
-    non_social = [s for s in usable if not is_social_host(s.url)]
+    # Social posts and sales pages are not evidence: drop them whenever enough other sources remain.
+    non_social = [s for s in usable if not is_social_host(s.url) and not is_promotional(s.summary)]
     if len(non_social) >= 3:
         usable = non_social
     return sorted(usable, key=lambda s: s.quality_score, reverse=True)
