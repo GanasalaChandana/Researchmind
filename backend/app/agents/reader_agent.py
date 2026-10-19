@@ -26,6 +26,10 @@ async def read_sources(sources: list[Source], language: str = "English") -> Asyn
         ), source
 
         content = await read_url(source.url)
+        if not content and source.summary and len(source.summary) >= 200:
+            # Page couldn't be fetched (bot-blocked, video page...). The search snippet is
+            # still real text: summarize it so the reference list doesn't show raw scraped markup.
+            content = source.summary
 
         # Always update summary, even if content is empty
         if content:

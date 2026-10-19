@@ -13,13 +13,17 @@ _ZERO_WIDTH = re.compile("[​-‍⁠﻿]")
 _REPLACEMENTS = {
     "→": "->", "←": "<-", "≥": ">=", "≤": "<=", "≈": "~",
     "≠": "!=",
-    **{chr(0x2080 + i): str(i) for i in range(10)},  # subscript digits, e.g. CO₂e "•": "-", "…": "...",
+    # subscript digits, e.g. CO2e
+    **{chr(0x2080 + i): str(i) for i in range(10)},
+    "•": "-", "…": "...",
 }
+_EMOJI = re.compile("[\U00010000-\U0010ffff\ufe0e\ufe0f]")  # PDF fonts render these as junk
 
 
 def clean_text(text):
     if not isinstance(text, str):
         return text
+    text = _EMOJI.sub("", text)
     text = _ZERO_WIDTH.sub("", text)
     text = _SPACES.sub(" ", text)
     text = _HYPHENS.sub("-", text)

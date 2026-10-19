@@ -9,6 +9,7 @@ const SECTION_BG: [number, number, number] = [238, 242, 255]; // indigo-50
 // arrows etc. (they showed up as "600 /L", "0 60 /mph"). Normalize before drawing.
 const pdfSafe = (t: string | undefined | null): string =>
   (t ?? "")
+    .replace(/[\u{10000}-\u{10FFFF}\ufe0e\ufe0f]/gu, "") // emoji: jsPDF renders them as "Ø=Ü@"
     .replace(/[\u200b-\u200d\u2060\ufeff]/g, "")
     .replace(/[\u00a0\u2002-\u200a\u202f\u205f\u3000]/g, " ")
     .replace(/[\u2010\u2011\u2012\u2212]/g, "-")

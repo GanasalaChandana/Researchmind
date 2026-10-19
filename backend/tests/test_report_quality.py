@@ -25,3 +25,9 @@ def test_clean_report_fields_covers_summary_sections_and_graph():
 
 def test_subscript_digits_become_plain_digits():
     assert clean_text("2 kg CO₂e per kg") == "2 kg CO2e per kg"
+
+
+def test_clean_text_strips_emoji_and_replaces_bullets():
+    from app.tools.text_clean import clean_text
+    assert clean_text("Sale \U0001F6D2 now") == "Sale  now"
+    assert clean_text("a • b…") == "a - b..."
