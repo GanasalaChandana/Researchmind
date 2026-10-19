@@ -191,6 +191,7 @@ Grounding rules (important):
 - If the sources do not cover part of a sub-question, say plainly that the sources do not cover it instead of guessing. Label analysis or recommendations as such ("Analysis:").
 - Put the citation right after every sentence that states a fact, and list every source a section uses in its "citations" array.
 - Vendor and marketing pages describe what a company claims, not measured results. Write "the vendor says ..." for them and never call such claims "documented" or "proven".
+- If a source covers a broader subject than the topic (for example AI in general when the topic is "AI bots"), say so in the section ("the sources discuss AI in general, not bots specifically") instead of presenting its findings as findings about the narrower topic.
 - Cite with one number per bracket, like [1][2]. Never write [1, 2].
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
@@ -235,6 +236,16 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
     report_data["summary"] = summary_text
     if len(ranked_sources) < before:
         logger.info("Dropped %d uncited source(s) from the reference list", before - len(ranked_sources))
+        # The graph was built from all sources; keep only what the remaining references support.
+        kg_dict = {
+            "entities": [e.model_dump() for e in kg.entities],
+            "relationships": [r.model_dump() for r in kg.relationships],
+        }
+        ground_knowledge_graph(kg_dict, ranked_sources)
+        kg = KnowledgeGraph(
+            entities=[Entity(**e) for e in kg_dict["entities"]],
+            relationships=[Relationship(**r) for r in kg_dict["relationships"]],
+        )
     citation_checks = await verify_citations(sections, ranked_sources)
 
     # Inject verification results into each section

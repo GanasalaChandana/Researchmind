@@ -109,3 +109,13 @@ def test_promotional_summary_detected_and_dropped():
     assert all(k.title != "promo" for k in kept) and len(kept) == 3
     # with too few real sources the promo page is kept rather than leaving nothing to cite
     assert len(rank_usable_sources(srcs[2:])) == 2
+
+
+def test_kg_regrounded_against_remaining_sources_drops_facts_from_pruned_source():
+    kept = [S(title="Benefits of AI", url="https://a.edu/x", summary="AI is a critical driver of efficiency and productivity across healthcare and finance.")]
+    kg = {"entities": [
+        {"id": "e1", "name": "Microsoft 365 Copilot", "type": "technology", "description": "Evaluated as a leading platform for agentic Enterprise AI assistance."},
+        {"id": "e2", "name": "AI", "type": "concept", "description": "AI is a critical driver of efficiency and productivity across healthcare and finance."},
+    ], "relationships": [{"source_id": "e1", "target_id": "e2", "label": "x", "weight": 1}]}
+    out = ground_knowledge_graph(kg, kept)
+    assert [e["name"] for e in out["entities"]] == ["AI"] and out["relationships"] == []
