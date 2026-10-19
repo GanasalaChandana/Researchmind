@@ -27,6 +27,12 @@ async def orchestrate(topic: str, depth: int, language: str = "English") -> Asyn
 
 Topic: {topic}{lang_instruction}
 
+Rules for the sub-questions:
+- Stay on the topic's exact subject. Keep its key terms in the questions ("AI bots" means bots, not AI in general); do not widen the topic.
+- If the topic contains a vague term, say in research_angle how you interpreted it.
+- For topics about news, trends, markets or impact, include one sub-question that looks for contrary or negative evidence (downsides, declines, layoffs, failures, criticism) so the report is not one-sided.
+- Each sub-question must work as a web search on its own, with names, places and years where relevant.
+
 Return a JSON object with this exact structure:
 {{
   "sub_questions": ["question 1", "question 2", ...],
