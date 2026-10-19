@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Same address the stream/start proxies use (known to work); BACKEND_URL as fallback.
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "http://localhost:8000";
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000");
 
 export const dynamic = "force-dynamic";
 
