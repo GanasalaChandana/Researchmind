@@ -770,6 +770,15 @@ def _normalize_topic(topic: str) -> str:
 
 _CACHE_TTL_DAYS = 7
 
+# Bump whenever report generation changes in a way that makes old cached reports worse
+# (grounding, citation fixes, ...). Cached reports from an older version are ignored and
+# the topic is researched again instead of serving a stale, lower-quality report.
+PIPELINE_VERSION = 2
+
+
+def _is_current(report) -> bool:
+    return isinstance(report, dict) and report.get("pipeline_version") == PIPELINE_VERSION
+
 
 async def get_cached_research(topic: str) -> Optional[dict]:
     """Get cached research report if available and not older than _CACHE_TTL_DAYS."""
@@ -778,7 +787,7 @@ async def get_cached_research(topic: str) -> Optional[dict]:
 
         # L1: Redis (sub-millisecond)
         redis_hit = await _cache.get(_cache.research_cache_key(topic_normalized))
-        if redis_hit is not None:
+        if redis_hit is not None and _is_current(redis_hit):
             return redis_hit
 
         # L2: Postgres research_cache table
@@ -794,6 +803,8 @@ async def get_cached_research(topic: str) -> Optional[dict]:
                 report = row["report"]
                 if isinstance(report, str):
                     report = json.loads(report)
+                if not _is_current(report):
+                    return None
                 # Promote to Redis so next hit skips DB entirely
                 await _cache.set(
                     _cache.research_cache_key(topic_normalized),
@@ -809,6 +820,7 @@ async def get_cached_research(topic: str) -> Optional[dict]:
 async def cache_research(topic: str, report: dict):
     """Cache a completed research report in both Postgres and Redis."""
     try:
+        report = {**report, "pipeline_version": PIPELINE_VERSION}
         topic_normalized = _normalize_topic(topic)
         pool = await get_pool()
         async with pool.acquire() as conn:

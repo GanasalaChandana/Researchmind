@@ -86,3 +86,11 @@ def test_normalize_grouped_and_duplicate_markers():
     assert normalize_markers("x [3,4].") == "x [3][4]."
     assert normalize_markers("x [3] [3].") == "x [3]."
     assert normalize_markers("x [1][2].") == "x [1][2]."
+
+
+def test_cached_reports_from_older_pipeline_are_ignored():
+    from app.database import PIPELINE_VERSION, _is_current
+    assert _is_current({"pipeline_version": PIPELINE_VERSION})
+    assert not _is_current({"summary": "old cached report"})
+    assert not _is_current({"pipeline_version": PIPELINE_VERSION - 1})
+    assert not _is_current(None)
