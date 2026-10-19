@@ -5,6 +5,7 @@ import logging
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
+from ..tools.citation_repair import repair_citations
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
@@ -189,6 +190,9 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
         message="Verifying citations against sources…",
     ), None
 
+    repaired = repair_citations(sections, ranked_sources)
+    if repaired:
+        logger.info("Repaired %d mis-numbered citation(s)", repaired)
     citation_checks = await verify_citations(sections, ranked_sources)
 
     # Inject verification results into each section
