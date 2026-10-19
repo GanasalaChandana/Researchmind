@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { _authHeaders, streamResearch, createShareLink, getReportVersions, getReportVersion, refreshResearch, type ReportVersion } from "@/lib/api";
+import { _authHeaders, retryResearch, streamResearch, createShareLink, getReportVersions, getReportVersion, refreshResearch, type ReportVersion } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
@@ -84,12 +84,68 @@ export default function ResearchSessionPage() {
         startStream();
       });
 
-    function startStream() {
+    // Push a visible error into the activity feed (it renders a red banner).
+    function failWith(message: string) {
+      setEvents((prev) => prev.some((e) => e.type === "error") ? prev : [
+        ...prev,
+        { type: "error", agent: "system", message } as AgentEvent,
+      ]);
+      setStatus("failed");
+      setPhase("done");
+    }
+
+    // The free backend sleeps when idle and takes up to ~50s to wake. Wake it first and say so,
+    // instead of letting the stream time out into a blank "Failed".
+    async function wakeBackend(): Promise<boolean> {
+      const slow = setTimeout(() => {
+        setEvents((prev) => [...prev, {
+          type: "thinking", agent: "system",
+          message: "Waking up the server. It sleeps when idle, so the first request can take up to a minute…",
+        } as AgentEvent]);
+      }, 4000);
+      try {
+        const r = await fetch("/api/health", { cache: "no-store" });
+        return r.ok;
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(slow);
+      }
+    }
+
+    // After the stream dies, find out why and tell the user in plain words.
+    async function explainDisconnect(gotEvents: boolean) {
+      try {
+        const r = await fetch(`/api/research/${sessionId}/report`, { headers: _authHeaders() });
+        if (r.status === 401) { failWith("This research belongs to an account. Please log in to view it."); return; }
+        if (r.ok) {
+          const data = await r.json();
+          if (data?.report) {
+            completedRef.current = true;
+            setReport(data.report as ResearchReport);
+            setStatus("completed"); setPhase("done"); setTab("report");
+            return;
+          }
+        }
+      } catch {}
+      failWith(gotEvents
+        ? "The connection to the server was lost partway through. This usually means the AI provider is busy or the server restarted. Please try again."
+        : "Couldn't reach the server. It may have been asleep. Please try again in a moment.");
+    }
+
+    async function startStream() {
       if (!topic) return;
+      const awake = await wakeBackend();
+      if (!awake) {
+        failWith("The server didn't wake up in time. Please try again in a minute.");
+        return;
+      }
+      let gotEvents = false;
       const es = streamResearch(sessionId, topic, depth, undefined, language, docIds.length ? docIds : undefined, modelTier !== "balanced" ? modelTier : undefined);
 
       es.onmessage = (e) => {
         try {
+          gotEvents = true;
           const event: AgentEvent = JSON.parse(e.data);
           setEvents((prev) => [...prev, event]);
 
@@ -132,11 +188,8 @@ export default function ResearchSessionPage() {
       };
 
       es.onerror = () => {
-        if (!completedRef.current) {
-          setStatus((prev) => (prev === "running" ? "failed" : prev));
-          setPhase("done");
-        }
         es.close();
+        if (!completedRef.current) explainDisconnect(gotEvents);
       };
     }
   }, [sessionId]);
@@ -149,6 +202,17 @@ export default function ResearchSessionPage() {
       router.push(`/research/${new_session_id}?topic=${encodeURIComponent(topic || report?.topic || "")}&depth=3`);
     } catch {
       toast.error("Failed to start refresh");
+      setRefreshing(false);
+    }
+  }
+
+  async function handleRetry() {
+    setRefreshing(true);
+    try {
+      const { session_id } = await retryResearch(sessionId);
+      router.push(`/research/${session_id}?topic=${encodeURIComponent(topic || report?.topic || "")}&depth=${depth}`);
+    } catch {
+      toast.error("Couldn't start a new attempt. Please try again.");
       setRefreshing(false);
     }
   }
@@ -291,6 +355,19 @@ export default function ResearchSessionPage() {
           </button>
         </div>
       </div>
+
+      {status === "failed" && (
+        <div className="glass rounded-xl p-4 mb-4 flex items-center justify-between gap-3 border border-red-500/30">
+          <p className="text-sm text-slate-300">This research didn&apos;t finish. You can try again with the same topic.</p>
+          <button
+            onClick={handleRetry}
+            disabled={refreshing}
+            className="px-3 py-2 rounded-lg bg-brand-500 text-white text-sm font-medium disabled:opacity-50 shrink-0"
+          >
+            {refreshing ? "Starting…" : "Try again"}
+          </button>
+        </div>
+      )}
 
       {/* Progress bar — only shown while running */}
       {status === "running" && <ResearchProgress phase={phase} />}

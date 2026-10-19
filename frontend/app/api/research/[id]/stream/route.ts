@@ -22,7 +22,9 @@ export async function GET(
   if (docIds)    backendUrl += `&doc_ids=${encodeURIComponent(docIds)}`;
   if (modelTier) backendUrl += `&model_tier=${encodeURIComponent(modelTier)}`;
 
-  const backendRes = await fetch(backendUrl, {
+  let backendRes: Response;
+  try {
+    backendRes = await fetch(backendUrl, {
     headers: {
       Accept: "text/event-stream",
       "Cache-Control": "no-cache",
@@ -31,7 +33,13 @@ export async function GET(
         ? { "X-Forwarded-For": req.headers.get("x-forwarded-for")! }
         : {}),
     },
-  });
+    });
+  } catch {
+    return new Response("Backend unreachable", { status: 502 });
+  }
+  if (!backendRes.ok || !backendRes.body) {
+    return new Response(await backendRes.text().catch(() => "Backend error"), { status: backendRes.status || 502 });
+  }
 
   // Stream the response directly to the client
   return new Response(backendRes.body, {
