@@ -41,6 +41,13 @@ _MEDIUM_AUTHORITY = {
     "investopedia.com", "statista.com",
 }
 
+# Social posts / user-generated threads: anyone can write anything, nothing is vetted.
+_SOCIAL = {
+    "facebook.com", "fb.com", "instagram.com", "twitter.com", "x.com", "tiktok.com",
+    "reddit.com", "quora.com", "pinterest.com", "threads.net", "tumblr.com",
+    "youtube.com", "youtu.be",
+}
+
 # Everything else defaults to "low"
 
 # ── Recency patterns ──────────────────────────────────────────────────────────
@@ -49,14 +56,25 @@ _YEAR_PATTERN = re.compile(r"\b(20\d{2})\b")
 _CURRENT_YEAR = datetime.now().year
 
 
+def is_social_host(host_or_url: str) -> bool:
+    """True for social-media / user-generated hosts (Facebook groups, Reddit, X, ...)."""
+    host = host_or_url
+    if "//" in host:
+        host = urlparse(host).hostname or ""
+    host = host.lower().removeprefix("www.")
+    return host in _SOCIAL or any(host.endswith("." + h) for h in _SOCIAL)
+
+
 def _domain_tier(url: str) -> tuple[str, float]:
     """Return (tier_label, score_0_to_50)."""
     try:
         host = urlparse(url).hostname or ""
-        host = host.lstrip("www.")
+        host = host.lower().removeprefix("www.")  # NOT lstrip("www."): that strips letters ("wired.com" -> "ired.com")
     except Exception:
         return "low", 5.0
 
+    if is_social_host(host):
+        return "low", 0.0
     if host in _HIGH_AUTHORITY or any(host.endswith("." + h) for h in _HIGH_AUTHORITY):
         return "high", 50.0
     if host in _MEDIUM_AUTHORITY or any(host.endswith("." + h) for h in _MEDIUM_AUTHORITY):

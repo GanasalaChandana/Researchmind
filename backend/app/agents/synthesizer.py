@@ -5,7 +5,9 @@ import logging
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
-from ..tools.citation_repair import repair_citations
+from ..tools.citation_repair import repair_citations, add_missing_citations, prune_uncited_sources
+from ..tools.kg_grounding import ground_knowledge_graph
+from ..tools.source_scorer import is_social_host
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
@@ -41,6 +43,10 @@ def rank_usable_sources(sources: list[Source]) -> list[Source]:
     usable = [s for s in sources if s.summary and not _UNUSABLE_SUMMARY.search(s.summary)]
     if not usable:  # never end up with nothing to cite
         usable = [s for s in sources if s.summary]
+    # Social posts are not evidence: drop them whenever enough other sources remain.
+    non_social = [s for s in usable if not is_social_host(s.url)]
+    if len(non_social) >= 3:
+        usable = non_social
     return sorted(usable, key=lambda s: s.quality_score, reverse=True)
 
 
@@ -101,7 +107,13 @@ Return a JSON object:
 }}
 
 Entity types: concept, person, organization, event, technology
-Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
+
+Rules (important):
+- Use ONLY names, descriptions, dates and numbers that appear in the sources above. Never add facts, versions, dates or numbers from your own knowledge.
+- Do NOT expand acronyms or add alternative names unless a source does so itself.
+- Each description must restate what a source says about that entity, in one sentence. If the sources say nothing about it, leave the entity out.
+- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics.
+Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = await groq_with_retry(
         client,
@@ -118,6 +130,7 @@ Extract 8-12 entities and 8-15 relationships. Return only valid JSON, no markdow
         kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
 
     clean_report_fields({}, kg_data)
+    ground_knowledge_graph(kg_data, ranked_sources)
     kg = KnowledgeGraph(
         entities=[Entity(**e) for e in kg_data.get("entities", [])],
         relationships=[Relationship(**r) for r in kg_data.get("relationships", [])],
@@ -147,14 +160,14 @@ Sub-questions addressed:
 
 Return a JSON object:
 {{
-  "summary": "2-3 sentence executive summary",
   "sections": [
     {{
       "heading": "section title",
       "content": "detailed content with inline citations like [1], [2]",
       "citations": [1, 2]
     }}
-  ]
+  ],
+  "summary": "2-3 sentence executive summary, written AFTER the sections"
 }}
 
 Grounding rules (important):
@@ -162,6 +175,9 @@ Grounding rules (important):
 - Ignore words that only appear inside URLs; they are not evidence.
 - Every sentence with a factual claim must be supported by the source you cite for it. Never cite a source for something it does not say.
 - If the sources do not cover part of a sub-question, say plainly that the sources do not cover it instead of guessing. Label analysis or recommendations as such ("Analysis:").
+- Put the citation right after every sentence that states a fact, and list every source a section uses in its "citations" array.
+- Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
+- The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
 - Use plain ASCII punctuation: regular spaces and hyphens only.
 
 Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction}"""
@@ -191,8 +207,15 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
     ), None
 
     repaired = repair_citations(sections, ranked_sources)
-    if repaired:
-        logger.info("Repaired %d mis-numbered citation(s)", repaired)
+    added = add_missing_citations(sections, ranked_sources)
+    if repaired or added:
+        logger.info("Citations: repaired %d mis-numbered, added %d missing", repaired, added)
+    summary_text = report_data.get("summary", "")
+    before = len(ranked_sources)
+    ranked_sources, summary_text = prune_uncited_sources(sections, summary_text, ranked_sources)
+    report_data["summary"] = summary_text
+    if len(ranked_sources) < before:
+        logger.info("Dropped %d uncited source(s) from the reference list", before - len(ranked_sources))
     citation_checks = await verify_citations(sections, ranked_sources)
 
     # Inject verification results into each section

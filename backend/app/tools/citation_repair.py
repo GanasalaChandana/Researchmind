@@ -93,3 +93,90 @@ def repair_citations(sections: list[dict], sources: list) -> int:
             section["citations"] = seen
 
     return changed
+
+
+# ── Uncited sentences ─────────────────────────────────────────────────────────
+
+ADD_MIN_COVERAGE = 0.50   # a source must contain half the sentence's key terms
+ADD_MIN_TERMS = 5         # ...and the sentence must have enough terms to judge
+_SKIP_PREFIX = re.compile(r"^\s*(analysis|recommendation|note)\b", re.IGNORECASE)
+_SKIP_HEDGE = re.compile(r"\b(do(es)? not|don't|no source|sources? (do|does) not|unavailable|limited to)\b", re.IGNORECASE)
+
+
+def add_missing_citations(sections: list[dict], sources: list) -> int:
+    """Cite factual sentences the writer left without a marker, when one source
+    clearly contains them. Analysis, recommendations and "sources don't say" lines
+    are left uncited on purpose. Returns the number of markers added."""
+    src_terms = [
+        _terms(f"{getattr(s, 'title', '')} {getattr(s, 'summary', '') or ''}") for s in sources
+    ]
+    added = 0
+    for section in sections:
+        content = section.get("content") or ""
+        if not content:
+            continue
+        out = []
+        for sent in _SENT_SPLIT.split(content):
+            if _MARKER.search(sent) or _SKIP_PREFIX.match(sent) or _SKIP_HEDGE.search(sent):
+                out.append(sent)
+                continue
+            terms = _terms(sent)
+            if len(terms) < ADD_MIN_TERMS or not src_terms:
+                out.append(sent)
+                continue
+            scores = [_coverage(terms, st) for st in src_terms]
+            best = max(range(len(scores)), key=lambda i: scores[i])
+            runner_up = max((v for i, v in enumerate(scores) if i != best), default=0.0)
+            if scores[best] >= ADD_MIN_COVERAGE and scores[best] - runner_up >= 0.10:
+                sent = sent.rstrip()
+                if sent and sent[-1] in ".!?":
+                    sent = f"{sent[:-1]} [{best + 1}]{sent[-1]}"
+                else:
+                    sent = f"{sent} [{best + 1}]"
+                added += 1
+            out.append(sent)
+        new_content = " ".join(out)
+        if new_content != content:
+            section["content"] = new_content
+            seen: list[int] = []
+            for n in (int(x) for x in _MARKER.findall(new_content)):
+                if 1 <= n <= len(sources) and n not in seen:
+                    seen.append(n)
+            section["citations"] = seen
+    return added
+
+
+# ── Uncited sources ───────────────────────────────────────────────────────────
+
+def prune_uncited_sources(sections: list[dict], summary: str, sources: list):
+    """Drop sources no section cites and renumber everything that remains.
+
+    A reference list that includes sources the text never uses misleads the reader
+    (and is where weak sources hide). Returns (sources, summary). Does nothing when
+    fewer than two sources are cited, so a weak report keeps all its evidence.
+    """
+    used: list[int] = []
+    for section in sections:
+        nums = {int(n) for n in _MARKER.findall(section.get("content") or "")}
+        nums |= {int(n) for n in (section.get("citations") or []) if str(n).isdigit()}
+        for n in sorted(nums):
+            if 1 <= n <= len(sources) and n not in used:
+                used.append(n)
+    used.sort()
+    if len(used) < 2 or len(used) == len(sources):
+        return sources, summary
+
+    remap = {old: new for new, old in enumerate(used, start=1)}
+
+    def _rewrite(text: str) -> str:
+        def sub(m):
+            old = int(m.group(1))
+            return f"[{remap[old]}]" if old in remap else ""
+        return re.sub(r"\s+(?=\[\d{1,3}\])|(?<=\])\s+(?=[.,;])", " ", _MARKER.sub(sub, text or "")).strip()
+
+    for section in sections:
+        section["content"] = _rewrite(section.get("content") or "")
+        section["citations"] = sorted(
+            {remap[int(n)] for n in (section.get("citations") or []) if str(n).isdigit() and int(n) in remap}
+        )
+    return [sources[i - 1] for i in used], _rewrite(summary)
