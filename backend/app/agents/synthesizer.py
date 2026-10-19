@@ -5,7 +5,7 @@ import logging
 from groq import Groq
 from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
-from ..tools.citation_repair import repair_citations, add_missing_citations, prune_uncited_sources
+from ..tools.citation_repair import normalize_markers, repair_citations, add_missing_citations, prune_uncited_sources
 from ..tools.kg_grounding import ground_knowledge_graph
 from ..tools.source_scorer import is_social_host
 from ..tools.citation_verifier import verify_citations
@@ -176,6 +176,8 @@ Grounding rules (important):
 - Every sentence with a factual claim must be supported by the source you cite for it. Never cite a source for something it does not say.
 - If the sources do not cover part of a sub-question, say plainly that the sources do not cover it instead of guessing. Label analysis or recommendations as such ("Analysis:").
 - Put the citation right after every sentence that states a fact, and list every source a section uses in its "citations" array.
+- Vendor and marketing pages describe what a company claims, not measured results. Write "the vendor says ..." for them and never call such claims "documented" or "proven".
+- Cite with one number per bracket, like [1][2]. Never write [1, 2].
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
 - Use plain ASCII punctuation: regular spaces and hyphens only.
@@ -206,6 +208,9 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
         message="Verifying citations against sources…",
     ), None
 
+    for _sec in sections:
+        _sec["content"] = normalize_markers(_sec.get("content") or "")
+    report_data["summary"] = normalize_markers(report_data.get("summary", ""))
     repaired = repair_citations(sections, ranked_sources)
     added = add_missing_citations(sections, ranked_sources)
     if repaired or added:

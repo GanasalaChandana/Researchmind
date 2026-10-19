@@ -20,6 +20,19 @@ _STOP = frozenset(
     "would should its and for the not but all any each other another only both very".split()
 )
 
+_GROUP = re.compile(r"\[(\d{1,3}(?:\s*[,;]\s*\d{1,3})+)\]")
+_DUP = re.compile(r"(\[\d{1,3}\])(?:\s*\1)+")
+
+
+def normalize_markers(text: str) -> str:
+    """Turn "[3, 4]" into "[3][4]" and collapse repeats like "[3] [3]", so every
+    citation is a single-number marker the rest of the pipeline understands."""
+    if not text:
+        return text
+    text = _GROUP.sub(lambda m: "".join(f"[{n.strip()}]" for n in re.split(r"[,;]", m.group(1))), text)
+    return _DUP.sub(r"\1", text)
+
+
 # A cited source must cover at least this share of the sentence's key terms, else it
 # is "suspect"; a replacement must clearly beat it.
 SUSPECT_BELOW = 0.22

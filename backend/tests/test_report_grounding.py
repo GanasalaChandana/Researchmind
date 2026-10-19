@@ -78,3 +78,11 @@ def test_prune_noop_when_few_cited():
     sec = [{"content": "Only one [1].", "citations": [1]}]
     kept, _ = prune_uncited_sources(sec, "", SRC)
     assert kept is SRC
+
+
+def test_normalize_grouped_and_duplicate_markers():
+    from app.tools.citation_repair import normalize_markers
+    assert normalize_markers("privacy risks [3, 4] [3].") == "privacy risks [3][4] [3]."
+    assert normalize_markers("x [3,4].") == "x [3][4]."
+    assert normalize_markers("x [3] [3].") == "x [3]."
+    assert normalize_markers("x [1][2].") == "x [1][2]."
