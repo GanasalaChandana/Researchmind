@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph, Entity, Relationship
 from ..tools.citation_repair import normalize_markers, repair_citations, add_missing_citations, prune_uncited_sources
 from ..tools.kg_grounding import ground_knowledge_graph
+from ..tools.llm_json import parse_llm_json
 from ..tools.source_scorer import is_social_host
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
@@ -137,11 +138,9 @@ Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no
     )
 
     kg_raw = kg_response.choices[0].message.content.strip()
-    try:
-        kg_data = json.loads(kg_raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", kg_raw, re.DOTALL)
-        kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
+    kg_data = parse_llm_json(kg_raw, {"entities": [], "relationships": []})
+    if not isinstance(kg_data, dict):
+        kg_data = {"entities": [], "relationships": []}
 
     clean_report_fields({}, kg_data)
     _corpus = " ".join(f"{x.title} {x.summary}" for x in ranked_sources)
@@ -213,11 +212,10 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
     )
 
     report_raw = report_response.choices[0].message.content.strip()
-    try:
-        report_data = json.loads(report_raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", report_raw, re.DOTALL)
-        report_data = json.loads(match.group()) if match else {"summary": "", "sections": []}
+    report_data = parse_llm_json(report_raw, None)
+    if not isinstance(report_data, dict) or not report_data.get("sections"):
+        logger.warning("Report JSON could not be parsed (%d chars): %r", len(report_raw), report_raw[:200])
+        raise ValueError("The model returned a report in an unreadable format. Please try again.")
 
     clean_report_fields(report_data, {})
     sections = report_data.get("sections", [])

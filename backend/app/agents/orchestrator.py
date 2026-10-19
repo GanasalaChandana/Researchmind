@@ -1,4 +1,5 @@
 import json
+from ..tools.llm_json import parse_llm_json
 import re
 import asyncio
 from groq import Groq
@@ -49,11 +50,9 @@ Return only valid JSON, no markdown fences."""
     )
 
     raw = response.choices[0].message.content.strip()
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        parsed = json.loads(match.group()) if match else {"sub_questions": [topic], "research_angle": ""}
+    parsed = parse_llm_json(raw, None)
+    if not isinstance(parsed, dict):
+        parsed = {"sub_questions": [topic], "research_angle": ""}
 
     sub_questions = parsed.get("sub_questions", [topic])
     angle = parsed.get("research_angle", "")

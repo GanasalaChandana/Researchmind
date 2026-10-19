@@ -13,6 +13,7 @@ import re
 from groq import Groq
 from ..config import GROQ_API_KEY
 from .groq_models import FAST_MODEL, adapt_kwargs
+from .llm_json import parse_llm_json
 
 
 def _build_tasks(sections: list[dict], sources: list) -> list[dict]:
@@ -87,8 +88,7 @@ Return only valid JSON. No markdown fences."""
         raw = response.choices[0].message.content.strip()
 
         # Parse JSON — handle potential markdown fences
-        raw = re.sub(r"```(?:json)?", "", raw).strip()
-        results = json.loads(raw)
+        results = parse_llm_json(raw, [], array=True)
 
         mapping: dict = {}
         for item in results:
