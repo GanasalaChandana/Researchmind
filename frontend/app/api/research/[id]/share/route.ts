@@ -3,9 +3,10 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+  const auth = request.headers.get("Authorization");
   const response = await fetch(
     `${backendUrl}/research/${params.id}/share`,
-    { method: "POST" }
+    { method: "POST", headers: auth ? { Authorization: auth } : {} }
   );
 
   if (!response.ok) {

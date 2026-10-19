@@ -322,6 +322,31 @@ async def _get(session_id: str):
     return _mem.get(session_id)
 
 
+async def _session_for(session_id: str, user: dict | None) -> dict:
+    """Load a session the caller is allowed to access, or raise.
+
+    - Unknown session: 404.
+    - Session owned by an account: only that account may access it. No login: 401;
+      someone else's login: 404 (don't reveal that the session exists).
+    - Session with no owner (started anonymously): reachable by its random UUID, which
+      is the only credential the anonymous creator has.
+    """
+    session = await _get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    owner = session.get("user_id")
+    if owner:
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Log in to access this session",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if user.get("id") != owner:
+            raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
 async def _list(user_id: str = None, favorites_only: bool = False):
     try:
         return await list_sessions(user_id=user_id, favorites_only=favorites_only)
@@ -1243,21 +1268,17 @@ class _BulkTagRequest(_PydanticBase):
 
 
 @app.get("/research/{session_id}/versions")
-async def list_report_versions(session_id: str):
+async def list_report_versions(session_id: str, user: dict = Depends(get_optional_user)):
     """List all saved report versions for a session (newest first)."""
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _session_for(session_id, user)
     versions = await get_report_versions(session_id)
     return {"session_id": session_id, "versions": versions, "count": len(versions)}
 
 
 @app.get("/research/{session_id}/versions/{version}")
-async def get_report_version_detail(session_id: str, version: int):
+async def get_report_version_detail(session_id: str, version: int, user: dict = Depends(get_optional_user)):
     """Retrieve the full report for a specific historical version."""
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _session_for(session_id, user)
     report = await get_report_version(session_id, version)
     if report is None:
         raise HTTPException(status_code=404, detail=f"Version {version} not found")
@@ -1320,14 +1341,13 @@ async def bulk_tag_sessions(
 async def get_session_detail(
     session_id: str,
     request: Request,
+    user: dict = Depends(get_optional_user),
 ):
     """Get a single session. Supports ETag / If-None-Match for efficient polling."""
     import hashlib as _hashlib
     from fastapi.responses import Response as _ETResponse
 
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _session_for(session_id, user)
 
     body = json.dumps(session, default=str, sort_keys=True)
     etag = f'"{_hashlib.sha1(body.encode()).hexdigest()[:16]}"'
@@ -1625,15 +1645,13 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/research/{session_id}/report")
-async def get_report(session_id: str):
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session
+async def get_report(session_id: str, user: dict = Depends(get_optional_user)):
+    return await _session_for(session_id, user)
 
 
 @app.delete("/research/{session_id}")
-async def delete_research(session_id: str):
+async def delete_research(session_id: str, user: dict = Depends(get_optional_user)):
+    await _session_for(session_id, user)
     _mem.pop(session_id, None)
     try:
         await delete_session(session_id)
@@ -1643,12 +1661,10 @@ async def delete_research(session_id: str):
 
 
 @app.post("/research/{session_id}/retry")
-async def retry_research(session_id: str):
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def retry_research(session_id: str, user: dict = Depends(get_optional_user)):
+    session = await _session_for(session_id, user)
     new_id = str(uuid.uuid4())
-    await _create(new_id, session["topic"])
+    await _create(new_id, session["topic"], user_id=user["id"] if user else None)
     return {"session_id": new_id, "topic": session["topic"]}
 
 
@@ -1667,8 +1683,14 @@ async def stream_research(
     # Guard: the stream burns paid LLM/search quota, so it must belong to a session
     # created via /research/start and is rate-limited per client.
     check_rate_limit(http_request, bucket="research_stream", max_attempts=30, window_seconds=3600)
-    if not await _get(session_id):
+    existing = await _get(session_id)
+    if not existing:
         raise HTTPException(status_code=404, detail="Session not found")
+    # The stream (re)runs the pipeline and overwrites the session's report. EventSource
+    # cannot send a login header, so instead of an owner check we refuse to re-run a
+    # finished session: nobody can overwrite a stored report by guessing its id.
+    if existing.get("status") == "completed":
+        raise HTTPException(status_code=409, detail="Research already completed")
 
     async def event_generator():
         all_sources = []
@@ -1860,11 +1882,11 @@ async def stream_research(
 
 
 @app.get("/research/{session_id}/export/{format_type}")
-async def export_research(session_id: str, format_type: str):
+async def export_research(session_id: str, format_type: str, user: dict = Depends(get_optional_user)):
     """Export research report in different formats"""
     try:
-        session = await _get(session_id)
-        if not session or not session.get("report"):
+        session = await _session_for(session_id, user)
+        if not session.get("report"):
             raise HTTPException(status_code=404, detail="Session or report not found")
 
         report_dict = session["report"]
@@ -1965,12 +1987,13 @@ async def export_research(session_id: str, format_type: str):
 
 
 @app.get("/research/{session_id}/citations")
-async def get_citations(session_id: str, style: str = "apa"):
+async def get_citations(session_id: str, style: str = "apa", user: dict = Depends(get_optional_user)):
     """Get formatted citations for research"""
     try:
         session = await _get(session_id)
         if not session or not session.get("report"):
             return {"citations": {}, "style": style}
+        await _session_for(session_id, user)
 
         report_dict = session["report"]
         if isinstance(report_dict, str):
@@ -2009,6 +2032,8 @@ async def get_citations(session_id: str, style: str = "apa"):
                 continue
 
         return {"citations": citations, "style": style}
+    except HTTPException:
+        raise
     except Exception:
         # Return empty citations on any error
         return {"citations": {}, "style": style}
@@ -2017,11 +2042,9 @@ async def get_citations(session_id: str, style: str = "apa"):
 @app.post("/research/{session_id}/share")
 async def create_share_link(session_id: str, user: dict = Depends(get_optional_user)):
     """Create a shareable link for the research"""
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _session_for(session_id, user)
 
-    user_id = user.get("user_id") if user else None
+    user_id = user["id"] if user else None
     token_info = await create_share_token(session_id, user_id=user_id, expires_in_days=30)
 
     if not token_info:
@@ -2042,7 +2065,7 @@ async def create_share_link(session_id: str, user: dict = Depends(get_optional_u
 
 
 @app.post("/research/{session_id}/webhooks")
-async def add_webhook(session_id: str, req: WebhookRequest):
+async def add_webhook(session_id: str, req: WebhookRequest, user: dict = Depends(get_optional_user)):
     """Register a webhook URL to be notified when research completes or fails.
 
     Events: 'completed', 'failed', 'progress'
@@ -2061,9 +2084,7 @@ async def add_webhook(session_id: str, req: WebhookRequest):
     If you provide a `secret`, each request will include an
     `X-ResearchMind-Signature: sha256=<hmac>` header for verification.
     """
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _session_for(session_id, user)
 
     webhook = await register_webhook(
         session_id=session_id,
@@ -2075,15 +2096,17 @@ async def add_webhook(session_id: str, req: WebhookRequest):
 
 
 @app.get("/research/{session_id}/webhooks")
-async def get_webhooks(session_id: str):
+async def get_webhooks(session_id: str, user: dict = Depends(get_optional_user)):
     """List all registered webhooks for a session"""
+    await _session_for(session_id, user)
     webhooks = await list_webhooks(session_id)
     return {"webhooks": webhooks, "count": len(webhooks)}
 
 
 @app.delete("/research/{session_id}/webhooks/{webhook_id}")
-async def remove_webhook(session_id: str, webhook_id: str):
+async def remove_webhook(session_id: str, webhook_id: str, user: dict = Depends(get_optional_user)):
     """Delete a webhook registration"""
+    await _session_for(session_id, user)
     deleted = await delete_webhook(session_id, webhook_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -2091,8 +2114,9 @@ async def remove_webhook(session_id: str, webhook_id: str):
 
 
 @app.post("/research/{session_id}/webhooks/test")
-async def test_webhook(session_id: str):
+async def test_webhook(session_id: str, user: dict = Depends(get_optional_user)):
     """Send a test webhook event to all registered URLs for a session"""
+    await _session_for(session_id, user)
     await fire_webhook_event(
         session_id, "test",
         {"message": "This is a test webhook from ResearchMind", "session_id": session_id}
@@ -2124,13 +2148,7 @@ async def get_shared_research(share_token: str):
 @app.get("/research/{session_id}/shares")
 async def get_session_shares(session_id: str, user: dict = Depends(get_optional_user)):
     """List all active share tokens for a session (only owner can view)"""
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Check authorization: must be owner
-    if user and session.get("user_id") != user.get("user_id"):
-        raise HTTPException(status_code=403, detail="Not authorized")
+    await _session_for(session_id, user)
 
     tokens = await list_share_tokens(session_id)
     return {
@@ -2144,13 +2162,7 @@ async def get_session_shares(session_id: str, user: dict = Depends(get_optional_
 @app.delete("/research/{session_id}/shares/{share_token}")
 async def revoke_share_link(session_id: str, share_token: str, user: dict = Depends(get_optional_user)):
     """Revoke a share token"""
-    session = await _get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Check authorization
-    if user and session.get("user_id") != user.get("user_id"):
-        raise HTTPException(status_code=403, detail="Not authorized")
+    await _session_for(session_id, user)
 
     success = await delete_share_token(share_token)
     if not success:
@@ -2598,6 +2610,7 @@ async def assign_collection(
     current_user: dict = Depends(get_current_user),
 ):
     """Move a session into (or out of) a collection"""
+    await _session_for(session_id, current_user)
     session = await set_session_collection(session_id, body.collection_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

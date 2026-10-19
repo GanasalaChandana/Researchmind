@@ -5,8 +5,10 @@ export async function GET(
   const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 
   try {
+    const auth = request.headers.get("Authorization");
     const response = await fetch(
-      `${backendUrl}/research/${params.id}/export/${params.format}`
+      `${backendUrl}/research/${params.id}/export/${params.format}`,
+      { headers: auth ? { Authorization: auth } : {} }
     );
 
     if (!response.ok) {

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { streamResearch, createShareLink, getReportVersions, getReportVersion, refreshResearch, type ReportVersion } from "@/lib/api";
+import { _authHeaders, streamResearch, createShareLink, getReportVersions, getReportVersion, refreshResearch, type ReportVersion } from "@/lib/api";
 import { AgentEvent, ResearchReport, KnowledgeGraph } from "@/lib/types";
 import AgentActivityFeed from "@/components/AgentActivityFeed";
 import ReportViewer from "@/components/ReportViewer";
@@ -58,7 +58,7 @@ export default function ResearchSessionPage() {
     if (!sessionId) return;
 
     // Step 1: Check if session already has a saved report
-    fetch(`/api/research/${sessionId}/report`)
+    fetch(`/api/research/${sessionId}/report`, { headers: _authHeaders() })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.report) {

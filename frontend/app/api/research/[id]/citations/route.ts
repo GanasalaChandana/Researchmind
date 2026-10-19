@@ -8,8 +8,10 @@ export async function GET(
   const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 
   try {
+    const auth = request.headers.get("Authorization");
     const response = await fetch(
-      `${backendUrl}/research/${params.id}/citations?style=${style}`
+      `${backendUrl}/research/${params.id}/citations?style=${style}`,
+      { headers: auth ? { Authorization: auth } : {} }
     );
 
     if (!response.ok) {

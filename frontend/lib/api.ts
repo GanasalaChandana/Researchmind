@@ -85,17 +85,17 @@ export async function deleteUploadedDoc(docId: string): Promise<void> {
 }
 
 export async function getReport(sessionId: string) {
-  const res = await fetch(`${BACKEND}/research/${sessionId}/report`);
+  const res = await fetch(`${BACKEND}/research/${sessionId}/report`, { headers: _authHeaders() });
   if (!res.ok) throw new Error("Report not found");
   return res.json();
 }
 
 export async function deleteResearch(sessionId: string): Promise<void> {
-  await fetch(`/api/research/${sessionId}`, { method: "DELETE" });
+  await fetch(`/api/research/${sessionId}`, { method: "DELETE", headers: _authHeaders() });
 }
 
 export async function retryResearch(sessionId: string): Promise<{ session_id: string; topic: string }> {
-  const res = await fetch(`/api/research/${sessionId}/retry`, { method: "POST" });
+  const res = await fetch(`/api/research/${sessionId}/retry`, { method: "POST", headers: _authHeaders() });
   if (!res.ok) throw new Error("Failed to retry");
   return res.json();
 }
@@ -182,7 +182,7 @@ export interface Collection {
   created_at: string;
 }
 
-function _authHeaders(): Record<string, string> {
+export function _authHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

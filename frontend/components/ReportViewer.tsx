@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { exportToPdf } from "@/lib/exportPdf";
+import { _authHeaders } from "@/lib/api";
 import { exportToDocx } from "@/lib/exportDocx";
 import toast from "react-hot-toast";
 import { useLanguage } from "@/context/LanguageContext";
@@ -105,7 +106,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
   async function handleExportMarkdown() {
     setExporting("md"); setShowExportMenu(false);
     try {
-      const res = await fetch(`/api/research/${sessionId}/export/markdown`);
+      const res = await fetch(`/api/research/${sessionId}/export/markdown`, { headers: _authHeaders() });
       if (!res.ok) throw new Error();
       const { content, filename } = await res.json();
       const a = document.createElement("a");
@@ -120,7 +121,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
   async function handleExportHtml() {
     setExporting("html"); setShowExportMenu(false);
     try {
-      const res = await fetch(`/api/research/${sessionId}/export/html`);
+      const res = await fetch(`/api/research/${sessionId}/export/html`, { headers: _authHeaders() });
       if (!res.ok) throw new Error();
       const { content, filename } = await res.json();
       const a = document.createElement("a");
@@ -134,7 +135,7 @@ export default function ReportViewer({ report, sessionId }: { report: ResearchRe
 
   async function handleShare() {
     try {
-      const res = await fetch(`/api/research/${sessionId}/share`, { method: "POST" });
+      const res = await fetch(`/api/research/${sessionId}/share`, { method: "POST", headers: _authHeaders() });
       const data = await res.json();
       const shareUrl = `${window.location.origin}/shared/${data.share_token}`;
       navigator.clipboard.writeText(shareUrl);
