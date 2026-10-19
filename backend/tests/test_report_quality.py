@@ -31,3 +31,13 @@ def test_clean_text_strips_emoji_and_replaces_bullets():
     from app.tools.text_clean import clean_text
     assert clean_text("Sale \U0001F6D2 now") == "Sale  now"
     assert clean_text("a • b…") == "a - b..."
+
+
+def test_normalize_redis_url_handles_pasted_commands_and_quotes():
+    from app.tools.cache import normalize_redis_url
+    url = "rediss://default:pw123@fine-name-1.upstash.io:6379"
+    assert normalize_redis_url(url) == url
+    assert normalize_redis_url(f'  "{url}"  ') == url
+    assert normalize_redis_url(f"redis-cli --tls -u {url}") == url
+    assert normalize_redis_url("") == ""
+    assert normalize_redis_url("fine-name-1.upstash.io:6379") == "fine-name-1.upstash.io:6379"

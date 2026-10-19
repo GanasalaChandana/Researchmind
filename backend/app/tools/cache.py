@@ -13,6 +13,7 @@ research_cache:{topic_norm}  TTL 86400s normalized-topic report cache
 import json
 import logging
 import os
+import re
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -20,13 +21,25 @@ logger = logging.getLogger(__name__)
 _client = None
 _initialized = False
 
+_URL_IN_TEXT = re.compile(r"(rediss?://[^\s'\"]+|unix://[^\s'\"]+)")
+
+
+def normalize_redis_url(raw: str) -> str:
+    """Pull the connection URL out of whatever was pasted into REDIS_URL.
+
+    Upstash shows `redis-cli --tls -u rediss://default:...@host:6379` and people paste the
+    whole command, or the value with quotes/spaces around it. Take just the URL.
+    """
+    m = _URL_IN_TEXT.search(raw or "")
+    return m.group(1) if m else (raw or "").strip()
+
 
 async def _get_client():
     global _client, _initialized
     if _initialized:
         return _client
     _initialized = True
-    url = os.environ.get("REDIS_URL", "")
+    url = normalize_redis_url(os.environ.get("REDIS_URL", ""))
     if not url:
         return None
     try:
