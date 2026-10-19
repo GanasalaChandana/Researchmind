@@ -17,7 +17,13 @@ export async function GET(
       cache: "no-store",
       headers,
     });
-    if (!res.ok) return NextResponse.json(null, { status: res.status === 401 ? 401 : 404 });
+    if (!res.ok) {
+      // Pass the real status through (the page treats 401 as "private"); body is null for old callers.
+      return NextResponse.json(null, {
+        status: res.status === 401 ? 401 : 404,
+        headers: { "x-upstream-status": String(res.status) },
+      });
+    }
     const data = await res.json();
     return NextResponse.json(data);
   } catch {
