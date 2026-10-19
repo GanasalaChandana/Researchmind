@@ -41,3 +41,11 @@ def test_normalize_redis_url_handles_pasted_commands_and_quotes():
     assert normalize_redis_url(f"redis-cli --tls -u {url}") == url
     assert normalize_redis_url("") == ""
     assert normalize_redis_url("fine-name-1.upstash.io:6379") == "fine-name-1.upstash.io:6379"
+
+
+def test_normalize_redis_url_upgrades_tls_for_upstash():
+    from app.tools.cache import normalize_redis_url
+    cmd = "redis-cli --tls -u redis://default:pw@x-1.upstash.io:6379"
+    assert normalize_redis_url(cmd) == "rediss://default:pw@x-1.upstash.io:6379"
+    assert normalize_redis_url("redis://default:pw@x-1.upstash.io:6379") == "rediss://default:pw@x-1.upstash.io:6379"
+    assert normalize_redis_url("redis://localhost:6379") == "redis://localhost:6379"

@@ -30,8 +30,15 @@ def normalize_redis_url(raw: str) -> str:
     Upstash shows `redis-cli --tls -u rediss://default:...@host:6379` and people paste the
     whole command, or the value with quotes/spaces around it. Take just the URL.
     """
-    m = _URL_IN_TEXT.search(raw or "")
-    return m.group(1) if m else (raw or "").strip()
+    text = raw or ""
+    m = _URL_IN_TEXT.search(text)
+    if not m:
+        return text.strip()
+    url = m.group(1)
+    # `redis-cli --tls -u redis://...` carries TLS in the flag, and Upstash only accepts TLS.
+    if url.startswith("redis://") and ("--tls" in text or ".upstash.io" in url):
+        url = "rediss://" + url[len("redis://"):]
+    return url
 
 
 async def _get_client():
