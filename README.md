@@ -156,6 +156,39 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
+## Evaluation
+
+Report quality is measured automatically, with no LLM judge, by running real research
+requests against the live backend and scoring the saved reports (`eval/`).
+
+Latest run: 2026-10-19, 3 topics, depth 3, on the Groq free tier.
+
+| Metric | Result |
+|---|---|
+| Completion rate | 100% (3/3) |
+| Median / max time to a finished report | 24 s / 35 s |
+| Sources per report | 6.0 on average |
+| Duplicate sources | 0 |
+| Citation numbers pointing at a non-existent source | 0 |
+| Factual sections with no citation | 0 |
+| Garbled characters (broken typography) | 0 |
+| Numbers in a section that also appear in the sources it cites | 93% |
+| Claims confirmed by the app's own citation checker | 63% fully supported, 89% fully or partly supported |
+
+How to read these numbers:
+
+- It is a small sample (3 topics). It shows the pipeline works and what to watch, not
+  a benchmark.
+- "Numbers in cited sources" is a text match: it checks that each figure in a section
+  appears in the sources that section cites. It does not judge whether the claim is right.
+- The citation checker is the app's own LLM check, so it is a signal, not ground truth.
+  The weakest result was the retrieval-augmented-generation topic (40% fully supported).
+- The first eval runs failed on provider rate limits. That led to fixing a background
+  job that re-ran endlessly and burned the daily Groq quota, and to token-saving changes.
+
+Reproduce it: Actions → **Eval** → Run workflow (3 topics by default; up to 8 on a paid
+Groq plan), or locally: `python eval/run_eval.py --base-url <your backend URL>`.
+
 ## OAuth Setup
 
 ### Google
