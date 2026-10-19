@@ -30,7 +30,9 @@ def normalize_markers(text: str) -> str:
     if not text:
         return text
     text = _GROUP.sub(lambda m: "".join(f"[{n.strip()}]" for n in re.split(r"[,;]", m.group(1))), text)
-    return _DUP.sub(r"\1", text)
+    text = _DUP.sub(r"\1", text)
+    # "year earlier[3]." -> "year earlier [3]." (a marker glued to the word before it)
+    return re.sub(r"(?<=[A-Za-z0-9)\"\u201d])(?=\[\d{1,3}\])", " ", text)
 
 
 # A cited source must cover at least this share of the sentence's key terms, else it

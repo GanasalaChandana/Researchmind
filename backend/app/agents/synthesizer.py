@@ -11,7 +11,7 @@ from ..tools.source_scorer import is_social_host
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
-from ..tools.text_clean import clean_report_fields, clean_text
+from ..tools.text_clean import clean_report_fields, clean_text, fix_number_spacing
 from ..config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -144,6 +144,9 @@ Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no
         kg_data = json.loads(match.group()) if match else {"entities": [], "relationships": []}
 
     clean_report_fields({}, kg_data)
+    _corpus = " ".join(f"{x.title} {x.summary}" for x in ranked_sources)
+    for _e in kg_data.get("entities", []):
+        _e["description"] = fix_number_spacing(str(_e.get("description", "")), _corpus)
     ground_knowledge_graph(kg_data, ranked_sources)
     kg = KnowledgeGraph(
         entities=[Entity(**e) for e in kg_data.get("entities", [])],
@@ -192,6 +195,7 @@ Grounding rules (important):
 - Put the citation right after every sentence that states a fact, and list every source a section uses in its "citations" array.
 - Vendor and marketing pages describe what a company claims, not measured results. Write "the vendor says ..." for them and never call such claims "documented" or "proven".
 - If a source covers a broader subject than the topic (for example AI in general when the topic is "AI bots"), say so in the section ("the sources discuss AI in general, not bots specifically") instead of presenting its findings as findings about the narrower topic.
+- Keep every statistic attached to exactly what the source says it measures ("49% of leaders canceled projects" is not "49% of projects were canceled"). Keep numbers in the source's format, e.g. 127,000.
 - Cite with one number per bracket, like [1][2]. Never write [1, 2].
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
@@ -215,6 +219,10 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
 
     clean_report_fields(report_data, {})
     sections = report_data.get("sections", [])
+    _corpus = " ".join(f"{x.title} {x.summary}" for x in ranked_sources)
+    for _sec in sections:
+        _sec["content"] = fix_number_spacing(_sec.get("content") or "", _corpus)
+    report_data["summary"] = fix_number_spacing(report_data.get("summary", ""), _corpus)
 
     # Step 3: Verify citations
     yield AgentEvent(

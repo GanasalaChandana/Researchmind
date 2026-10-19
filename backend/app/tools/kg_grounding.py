@@ -25,10 +25,16 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
-def _best_sentence(name_terms: set[str], texts: list[str]) -> str:
+def _best_sentence(name_terms: set[str], texts: list[str], name: str = "") -> str:
     best, best_cov = "", 0.0
+    # Short names ("MCP", "GPT") have no 4+ letter terms: match the name itself.
+    literal = re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE) if name and not name_terms else None
     for text in texts:
         for sent in _SENT_SPLIT.split(text):
+            if literal is not None:
+                if literal.search(sent):
+                    return sent.strip()[:MAX_DESC_CHARS]
+                continue
             cov = _coverage(name_terms, _terms(sent))
             if cov > best_cov:
                 best, best_cov = sent.strip(), cov
@@ -44,6 +50,7 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
     corpus_terms = _terms(" ".join(texts))
     corpus_numbers = {n.strip(".,") for n in _NUMBER.findall(" ".join(texts))}
     source_terms = [_terms(t) for t in texts]
+    source_numbers = [{n.strip(".,") for n in _NUMBER.findall(t)} for t in texts]
 
     kept, kept_ids = [], set()
     for ent in kg_data.get("entities", []):
@@ -67,13 +74,18 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
 
         desc_terms = _terms(desc)
         numbers = {n.strip(".,") for n in _NUMBER.findall(desc)}
-        supported = (
+        # The description must be covered by ONE source, and its numbers must come from that
+        # same source (a "10%" from one article glued to a "13%" from another is a new claim).
+        covers = [_coverage(desc_terms, st) for st in source_terms] if desc_terms else []
+        best_i = max(range(len(covers)), key=lambda i: covers[i]) if covers else -1
+        supported = bool(
             desc_terms
-            and numbers <= corpus_numbers
-            and max((_coverage(desc_terms, st) for st in source_terms), default=0.0) >= DESC_MIN_COVERAGE
+            and best_i >= 0
+            and covers[best_i] >= DESC_MIN_COVERAGE
+            and numbers <= source_numbers[best_i]
         )
         if not supported:
-            desc = _best_sentence(name_terms, texts)
+            desc = _best_sentence(name_terms, texts, name)
             if not desc:
                 continue
 

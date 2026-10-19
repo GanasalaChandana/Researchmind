@@ -47,3 +47,22 @@ def clean_report_fields(report_data: dict, kg_data: dict) -> None:
         for key, val in list(rel.items()):
             if isinstance(val, str) and key not in ("source", "target", "id"):
                 rel[key] = clean_text(val)
+
+
+_SPACED_NUMBER = re.compile(r"(?<![\d,.])\d{1,3}(?: \d{3})+(?![\d])")
+
+
+def fix_number_spacing(text: str, corpus: str) -> str:
+    """Turn "127 000" back into "127,000" when the sources write it that way.
+
+    The writer model sometimes swaps thousands separators for spaces. Only numbers whose
+    comma form really appears in the sources are changed, so "in 5 100 cases" is safe.
+    """
+    if not text or not corpus:
+        return text
+
+    def sub(m):
+        cand = m.group(0).replace(" ", ",")
+        return cand if cand in corpus else m.group(0)
+
+    return _SPACED_NUMBER.sub(sub, text)

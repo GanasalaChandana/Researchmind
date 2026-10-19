@@ -119,3 +119,29 @@ def test_kg_regrounded_against_remaining_sources_drops_facts_from_pruned_source(
     ], "relationships": [{"source_id": "e1", "target_id": "e2", "label": "x", "weight": 1}]}
     out = ground_knowledge_graph(kg, kept)
     assert [e["name"] for e in out["entities"]] == ["AI"] and out["relationships"] == []
+
+
+def test_marker_glued_to_word_gets_a_space():
+    from app.tools.citation_repair import normalize_markers
+    assert normalize_markers("harder than a year earlier[3]. Next[4][5].") == "harder than a year earlier [3]. Next [4][5]."
+    assert normalize_markers("fine [3].") == "fine [3]."
+
+
+def test_number_spacing_restored_only_when_sources_use_commas():
+    from app.tools.text_clean import fix_number_spacing
+    corpus = "about 127,000 jobs and 95,667 layoffs"
+    assert fix_number_spacing("127 000 jobs, 95 667 layoffs", corpus) == "127,000 jobs, 95,667 layoffs"
+    assert fix_number_spacing("in 5 100 cases", corpus) == "in 5 100 cases"
+
+
+def test_kg_numbers_must_come_from_the_same_source():
+    srcs = [
+        S(title="Entry level", url="https://a.com/1", summary="The entry-level software engineer market shows a 10% projected growth for developers."),
+        S(title="Stanford", url="https://b.com/2", summary="A study reports a 13% decline in employment for early-career engineers in AI-exposed roles."),
+    ]
+    kg = {"entities": [{"id": "e1", "name": "Entry-Level Software Engineer", "type": "concept",
+                        "description": "Entry-level software engineer market shows 10% projected growth and a 13% decline in employment for early-career engineers."}],
+          "relationships": []}
+    out = ground_knowledge_graph(kg, srcs)
+    desc = out["entities"][0]["description"]
+    assert not ("10%" in desc and "13%" in desc)
