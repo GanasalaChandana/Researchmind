@@ -44,6 +44,7 @@ def _best_sentence(name_terms: set[str], texts: list[str], name: str = "") -> st
 def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
     """Return kg_data with unsupported claims removed. Mutates and returns it."""
     texts = [f"{getattr(s, 'title', '')}. {getattr(s, 'summary', '') or ''}" for s in sources]
+    summaries = [getattr(s, "summary", "") or "" for s in sources]  # fallback descriptions never come from titles
     if not texts:
         return kg_data
     corpus = _norm(" ".join(texts))
@@ -73,6 +74,7 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
             continue
 
         desc_terms = _terms(desc)
+        full_name = not name_terms or _coverage(name_terms, corpus_terms) >= 1.0
         numbers = {n.strip(".,") for n in _NUMBER.findall(desc)}
         # The description must be covered by ONE source, and its numbers must come from that
         # same source (a "10%" from one article glued to a "13%" from another is a new claim).
@@ -85,7 +87,11 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
             and numbers <= source_numbers[best_i]
         )
         if not supported:
-            desc = _best_sentence(name_terms, texts, name)
+            # The description can't be trusted, so the name is the only anchor: every word in it
+            # must occur in the sources ("Glocomms ..." with no "Glocomms" anywhere is invented).
+            if not full_name:
+                continue
+            desc = _best_sentence(name_terms, summaries, name)
             if not desc:
                 continue
 

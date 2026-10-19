@@ -196,6 +196,8 @@ Grounding rules (important):
 - Vendor and marketing pages describe what a company claims, not measured results. Write "the vendor says ..." for them and never call such claims "documented" or "proven".
 - If a source covers a broader subject than the topic (for example AI in general when the topic is "AI bots"), say so in the section ("the sources discuss AI in general, not bots specifically") instead of presenting its findings as findings about the narrower topic.
 - Keep every statistic attached to exactly what the source says it measures ("49% of leaders canceled projects" is not "49% of projects were canceled"). Keep numbers in the source's format, e.g. 127,000.
+- Use a source only for the subject it covers. A market-size or product report is not evidence about hiring, jobs or workers, and a vendor survey is not evidence about the whole industry. If no source is about a sub-question, say so.
+- Keep cause and effect the way the source states them; never reverse them (if a source says A drives B, do not write that B drives A).
 - Cite with one number per bracket, like [1][2]. Never write [1, 2].
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.

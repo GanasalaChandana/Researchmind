@@ -145,3 +145,14 @@ def test_kg_numbers_must_come_from_the_same_source():
     out = ground_knowledge_graph(kg, srcs)
     desc = out["entities"][0]["description"]
     assert not ("10%" in desc and "13%" in desc)
+
+
+def test_kg_entity_with_invented_name_word_dropped_even_if_title_matches():
+    srcs = [S(title="Tech Job Market 2026: Layoffs, AI Salaries, and Hiring Data - Pin", url="https://www.pin.com/x",
+              summary="US tech job listings are roughly 36% below their February 2020 baseline while machine-learning engineer openings are up 59%.")]
+    kg = {"entities": [
+        {"id": "e1", "name": "Glocomms Tech Careers 2026", "type": "organization", "description": "Tech Job Market 2026: Layoffs, AI Salaries, and Hiring Data - Pin."},
+        {"id": "e2", "name": "Tech job listings", "type": "concept", "description": "US tech job listings are roughly 36% below their February 2020 baseline."},
+    ], "relationships": []}
+    out = ground_knowledge_graph(kg, srcs)
+    assert [e["name"] for e in out["entities"]] == ["Tech job listings"]

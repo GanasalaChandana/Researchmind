@@ -773,7 +773,7 @@ _CACHE_TTL_DAYS = 7
 # Bump whenever report generation changes in a way that makes old cached reports worse
 # (grounding, citation fixes, ...). Cached reports from an older version are ignored and
 # the topic is researched again instead of serving a stale, lower-quality report.
-PIPELINE_VERSION = 4
+PIPELINE_VERSION = 5
 
 
 def _is_current(report) -> bool:
