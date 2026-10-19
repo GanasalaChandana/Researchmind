@@ -59,8 +59,16 @@ export default function ResearchSessionPage() {
 
     // Step 1: Check if session already has a saved report
     fetch(`/api/research/${sessionId}/report`, { headers: _authHeaders() })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
+      .then((r) => {
+        if (r.status === 401) return { __private: true };
+        return r.ok ? r.json() : null;
+      })
+      .then((data: any) => {
+        if (data?.__private) {
+          setInitializing(false);
+          failWith("This report is private to its owner's account. Please log in to view it.");
+          return;
+        }
         if (data?.report) {
           // Session already completed — load from DB, no streaming needed
           setReport(data.report as ResearchReport);
