@@ -45,6 +45,9 @@ export function streamResearch(
   if (modelTier && modelTier !== "balanced") {
     params.append("model_tier", modelTier);
   }
+  // EventSource cannot send headers; the stream proxy turns this into an Authorization header.
+  const token = typeof window !== "undefined" ? localStorage.getItem("rm_access_token") : null;
+  if (token) params.append("token", token);
   // Use Next.js API proxy to avoid Vercel SSE buffering issues
   return new EventSource(`/api/research/${sessionId}/stream?${params}`);
 }

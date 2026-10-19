@@ -89,3 +89,10 @@ def test_stream_refuses_to_rerun_a_completed_session(client):
     r = client.get(f"/research/{sid}/stream", params={"topic": "something else"})
     assert r.status_code == 409
     assert main._mem[sid]["report"] == {"summary": "keep me"}
+
+
+def test_stream_of_owned_session_requires_the_owner(client, owned):
+    sid, alice, bob = owned
+    params = {"topic": "owned topic here"}
+    assert client.get(f"/research/{sid}/stream", params=params).status_code == 401
+    assert client.get(f"/research/{sid}/stream", params=params, headers=bob).status_code == 404

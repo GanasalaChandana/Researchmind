@@ -1679,13 +1679,14 @@ async def stream_research(
     doc_ids: str = Query(default=None, max_length=500),
     model_tier: str = Query(default="balanced", pattern="^(fast|balanced|deep)$"),
     bypass_cache: bool = Query(default=False),
+    user: dict | None = Depends(get_optional_user),
 ):
     # Guard: the stream burns paid LLM/search quota, so it must belong to a session
     # created via /research/start and is rate-limited per client.
     check_rate_limit(http_request, bucket="research_stream", max_attempts=30, window_seconds=3600)
-    existing = await _get(session_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # Owned sessions: only the owner may attach. The report is delivered through this
+    # stream (cache hit / "done" event), so it needs the same check as GET /report.
+    existing = await _session_for(session_id, user)
     # The stream (re)runs the pipeline and overwrites the session's report. EventSource
     # cannot send a login header, so instead of an owner check we refuse to re-run a
     # finished session: nobody can overwrite a stored report by guessing its id.

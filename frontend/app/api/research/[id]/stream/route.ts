@@ -16,6 +16,7 @@ export async function GET(
   const language = req.nextUrl.searchParams.get("language");
   const docIds     = req.nextUrl.searchParams.get("doc_ids");
   const modelTier  = req.nextUrl.searchParams.get("model_tier");
+  const token      = req.nextUrl.searchParams.get("token");
 
   let backendUrl = `${BACKEND}/research/${sessionId}/stream?topic=${encodeURIComponent(topic)}&depth=${depth}`;
   if (language)  backendUrl += `&language=${encodeURIComponent(language)}`;
@@ -27,6 +28,7 @@ export async function GET(
     backendRes = await fetch(backendUrl, {
     headers: {
       Accept: "text/event-stream",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Cache-Control": "no-cache",
       // Forward the real client IP so backend rate limits apply per user, not per Vercel proxy.
       ...(req.headers.get("x-forwarded-for")
