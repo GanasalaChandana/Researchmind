@@ -861,7 +861,7 @@ async def prometheus_metrics():
     return _FResponse(content=body, media_type=content_type)
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])  # uptime monitors (UptimeRobot free) probe with HEAD
 async def health():
     """Liveness probe — always 200 while the process is up, so a paused/unreachable
     database (e.g. an inactive Supabase free project) can't fail the platform
@@ -869,7 +869,7 @@ async def health():
     return await _health_payload(strict=False)
 
 
-@app.get("/health/ready")
+@app.api_route("/health/ready", methods=["GET", "HEAD"])
 async def health_ready():
     """Readiness probe — 503 when the DB is configured but unreachable."""
     return await _health_payload(strict=True)

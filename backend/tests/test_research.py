@@ -127,3 +127,11 @@ def test_delete_session(client):
     sid = _start(client, headers=headers).json()["session_id"]
     r = client.delete(f"/research/{sid}", headers=headers)
     assert r.status_code == 200
+
+
+def test_health_accepts_head_for_uptime_monitors():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as c:
+        assert c.head("/health").status_code == 200
+        assert c.get("/health").status_code == 200
