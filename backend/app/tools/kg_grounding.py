@@ -53,6 +53,10 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
     source_terms = [_terms(t) for t in texts]
     source_numbers = [{n.strip(".,") for n in _NUMBER.findall(t)} for t in texts]
 
+    all_names = {_norm(_PAREN.match(str(e.get("name", ""))).group("base")) if _PAREN.match(str(e.get("name", ""))) else _norm(str(e.get("name", "")))
+                 for e in kg_data.get("entities", [])}
+    all_names.discard("")
+
     kept, kept_ids = [], set()
     for ent in kg_data.get("entities", []):
         name = str(ent.get("name", "")).strip()
@@ -64,6 +68,13 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
         m = _PAREN.match(name)
         if m and _norm(m.group("inner")) not in corpus:
             name = m.group("base").strip() or name
+
+        # A description that opens with a different concept's name is about that concept
+        # (the "large language models" card that is really the RAG definition): drop it.
+        own = _norm(_PAREN.match(name).group("base")) if _PAREN.match(name) else _norm(name)
+        lead = _norm(desc)
+        if own and any(n != own and n and lead.startswith(n) and not lead.startswith(own) for n in all_names):
+            continue
 
         name_terms = _terms(name)
         name_numbers = {n.strip(".,") for n in _NUMBER.findall(name)}

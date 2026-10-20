@@ -186,3 +186,16 @@ def test_verifier_batches_large_reports(monkeypatch):
     sections = [{"content": " ".join(f"Claim {i} [{i}]." for i in range(1, 21)), "citations": list(range(1, 21))}]
     out = asyncio.new_event_loop().run_until_complete(cv.verify_citations(sections, [Src()] * 20))
     assert len(calls) == 3 and len(out) == 20
+
+
+def test_kg_drops_description_that_is_really_about_another_concept():
+    from app.tools.kg_grounding import ground_knowledge_graph
+    class S:
+        title = "RAG review"
+        summary = "Retrieval-Augmented Generation (RAG) combines large language models with information-retrieval systems to reduce hallucinations."
+    kg = {"entities": [
+        {"id": "1", "name": "Retrieval-Augmented Generation (RAG)", "description": "RAG combines large language models with information-retrieval systems to reduce hallucinations."},
+        {"id": "2", "name": "large language models", "description": "Retrieval-Augmented Generation (RAG) combines large language models with information-retrieval systems to reduce hallucinations."},
+    ], "relationships": []}
+    out = ground_knowledge_graph(kg, [S()])
+    assert [e["name"] for e in out["entities"]] == ["Retrieval-Augmented Generation (RAG)"]

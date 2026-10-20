@@ -198,6 +198,11 @@ Grounding rules (important):
 - Use a source only for the subject it covers. A market-size or product report is not evidence about hiring, jobs or workers, and a vendor survey is not evidence about the whole industry. If no source is about a sub-question, say so.
 - Keep cause and effect the way the source states them; never reverse them (if a source says A drives B, do not write that B drives A).
 - Cite with one number per bracket, like [1][2]. Never write [1, 2].
+- Keep the source's own status words. If a source calls something "emerging", "proposed", "planned" or "claimed", do not write that it is "standard", "leading", "widely used" or that "most" organizations do it.
+- Any named law, regulation, standard, product, company or date must appear in the source you cite for that sentence. If it does not, leave it out (do not add "such as GDPR" from your own knowledge).
+- Cite a sentence only to the source(s) that state it. Do not add a second source just because it is on the same topic.
+- When a statistic comes from a company's own blog or marketing page, name the publisher ("Atlan's article says ...") instead of attributing it to "sources" in general.
+- Do not put years, date ranges or numbers in section titles unless a source or the topic itself gives them.
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
 - Use plain ASCII punctuation: regular spaces and hyphens only.
