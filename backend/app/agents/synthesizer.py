@@ -237,6 +237,8 @@ Grounding rules (important):
 - Cite a sentence only to the source(s) that state it. Do not add a second source just because it is on the same topic.
 - When a statistic comes from a company's own blog or marketing page, name the publisher exactly as shown in that source's "Publisher:" line ("the cake.ai article says ...") instead of attributing it to "sources" in general. Never name a company or publisher that is not shown in the sources, and never guess a publisher from memory.
 - Keep a source's own warnings about its figures ("lower confidence due to a small sample", "estimate", "2019 dollars") next to those figures.
+- For a single study, give its design and size when the source does (e.g. "a 12-week study of 82 adults") and include any "larger studies are needed" or similar limit the source states, in the same sentence as the finding. An executive summary must not present such a finding more strongly than the section does.
+- Refer to a source by its publisher or its study type at first mention ("CLS Health says ...", "a meta-analysis of randomized trials"), not as "the article", "the review" or "the vendor-style article".
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").

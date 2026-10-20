@@ -247,3 +247,13 @@ def test_url_year_and_duplicate_kg_descriptions():
           "relationships": [{"source_id": "1", "target_id": "2", "label": "x", "weight": 0.5}]}
     out = ground_knowledge_graph(kg, [S()])
     assert [e["id"] for e in out["entities"]] == ["1"] and out["relationships"] == []
+
+
+def test_kg_fallback_requires_ratio_in_sentence():
+    from app.tools.kg_grounding import _best_sentence, _terms
+    texts = ["Intermittent fasting includes time-restricted feeding and alternate-day fasting.",
+             "Common protocols include the 16:8, 5:2 and alternate-day fasting methods."]
+    got = _best_sentence(_terms("16:8 time-restricted feeding"), texts, "16:8 time-restricted feeding")
+    assert got == ""  # no single sentence has both the ratio and the feeding-window words
+    got2 = _best_sentence(_terms("16:8 protocol"), texts, "16:8 protocol")
+    assert "16:8" in got2 or got2 == ""

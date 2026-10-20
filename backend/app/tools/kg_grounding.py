@@ -43,10 +43,14 @@ def _clip(sent: str) -> str:
 
 def _best_sentence(name_terms: set[str], texts: list[str], name: str = "") -> str:
     best, best_cov = "", 0.0
+    # Ratios and numbers in the name ("16:8", "5:2") must be in the sentence too.
+    name_tokens = re.findall(r"\d[\d:.,]*\d|\d", name or "")
     # Short names ("MCP", "GPT") have no 4+ letter terms: match the name itself.
     literal = re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE) if name and not name_terms else None
     for text in texts:
         for sent in _SENT_SPLIT.split(text):
+            if name_tokens and not all(tok in sent for tok in name_tokens):
+                continue
             if literal is not None:
                 if literal.search(sent):
                     return _clip(sent)
