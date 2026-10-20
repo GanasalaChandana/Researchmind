@@ -41,6 +41,19 @@ _PROMO = re.compile(
 )
 
 
+_COMMERCIAL = re.compile(
+    r"proof-of-value|no hidden costs|pilot program|pricing plans?|starting at \$|free (?:trial|demo)|"
+    r"(?:book|request|schedule) a (?:demo|call)|we offer|our (?:platform|product|solution|services)|"
+    r"cloud plan|enterprise (?:custom )?pricing|client-defined",
+    re.IGNORECASE,
+)
+
+
+def is_commercial(summary: str) -> bool:
+    """A page that sells something (even if it also informs): its claims are the company's own."""
+    return bool(_COMMERCIAL.search(summary or ""))
+
+
 def is_promotional(summary: str) -> bool:
     return len(_PROMO.findall(summary or "")) >= 3
 
@@ -137,7 +150,7 @@ async def synthesize(
     ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Source type: AI-generated summary page') if is_ai_aggregator(s.url) else ''}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Source type: AI-generated summary page') if is_ai_aggregator(s.url) else ''}{(chr(10) + 'Source type: company marketing page') if is_commercial(s.summary) else ''}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
         for i, s in enumerate(ranked_sources)
     )
 
@@ -273,6 +286,10 @@ Grounding rules (important):
 - Never attribute a statement, recommendation or conclusion to a source's authors unless the source text says it. If a sub-question (for example about gender, age or region) is not covered, write that the sources reviewed do not cover it; do not invent what the authors said about it.
 - Describe a trial or study only by what the source says it measures (for example weight maintenance and adherence), not by a goal it does not state (for example "to clarify safety").
 - A source marked "Source type: AI-generated summary page" is not primary evidence. If you use it, say so in the sentence ("an AI-generated summary page says ...") and do not use it as the only support for an important claim.
+- A source marked "Source type: company marketing page" sells something. Word its claims as the company's own ("masterofcode.com says ...", "the vendor reports ...") and never state them as established fact or as the only support for an important claim.
+- Do not guess reasons, barriers or motives the source does not state, not even to add "though the source does not specify". Just report the figure.
+- When citing a poll or survey, give its date and number of respondents if the source does.
+- If two sources give different figures for the same thing (for example two different market sizes for the same year), say so and name both.
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").

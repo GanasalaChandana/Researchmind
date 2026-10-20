@@ -291,3 +291,9 @@ def test_ai_aggregators_are_dropped_when_enough_real_sources_remain():
     assert [s.title for s in rank_usable_sources(srcs)] == ["A", "B", "C"] or len(rank_usable_sources(srcs)) == 3
     few = [mk("A", "https://a.org/1"), mk("D", "https://consensus.app/x")]
     assert len(rank_usable_sources(few)) == 2  # kept when little else is available
+
+
+def test_commercial_pages_are_detected():
+    from app.agents.synthesizer import is_commercial
+    assert is_commercial("A pilot program delivers a proof-of-value solution in 30 days, with no hidden costs.")
+    assert not is_commercial("The meta-analysis examined 27 randomized controlled trials.")
