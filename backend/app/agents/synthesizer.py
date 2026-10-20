@@ -236,6 +236,7 @@ Grounding rules (important):
 - Any named law, regulation, standard, product, company or date must appear in the source you cite for that sentence. If it does not, leave it out (do not add "such as GDPR" from your own knowledge).
 - Cite a sentence only to the source(s) that state it. Do not add a second source just because it is on the same topic.
 - When a statistic comes from a company's own blog or marketing page, name the publisher exactly as shown in that source's "Publisher:" line ("the cake.ai article says ...") instead of attributing it to "sources" in general. Never name a company or publisher that is not shown in the sources, and never guess a publisher from memory.
+- Keep a source's own warnings about its figures ("lower confidence due to a small sample", "estimate", "2019 dollars") next to those figures.
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").
@@ -284,6 +285,9 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
     summary_text = report_data.get("summary", "")
     before = len(ranked_sources)
     ranked_sources, summary_text = prune_uncited_sources(sections, summary_text, ranked_sources)
+    for _sec in sections:  # "Sources: [3] [2] [5]" reads better as [2] [3] [5]
+        if isinstance(_sec.get("citations"), list):
+            _sec["citations"] = sorted({int(c) for c in _sec["citations"] if str(c).isdigit() or isinstance(c, int)})
     report_data["summary"] = summary_text
     if len(ranked_sources) < before:
         logger.info("Dropped %d uncited source(s) from the reference list", before - len(ranked_sources))
