@@ -156,3 +156,33 @@ def test_kg_entity_with_invented_name_word_dropped_even_if_title_matches():
     ], "relationships": []}
     out = ground_knowledge_graph(kg, srcs)
     assert [e["name"] for e in out["entities"]] == ["Tech job listings"]
+
+
+def test_verifier_judges_the_sentence_carrying_the_marker():
+    from app.tools.citation_verifier import _build_tasks
+    class Src:
+        title = "T"; summary = "RAG retrieves documents before generating."
+    sections = [{"content": "Intro about markets. RAG retrieves documents first [2]. Other unrelated claim about cost [3].", "citations": [2]}]
+    tasks = _build_tasks(sections, [Src(), Src(), Src()])
+    assert "retrieves documents" in tasks[0]["section_snippet"]
+    assert "unrelated" not in tasks[0]["section_snippet"]
+
+
+def test_verifier_batches_large_reports(monkeypatch):
+    import asyncio
+    from app.tools import citation_verifier as cv
+    calls = []
+    class FakeResp:
+        def __init__(s, n): s.choices = [type("C", (), {"message": type("M", (), {"content": "[" + ",".join(f'{{"task":{i+1},"status":"verified","reason":"ok"}}' for i in range(n)) + "]"})()})()]
+    class FakeClient:
+        def __init__(s, **k):
+            s.chat = type("X", (), {"completions": s})()
+        def create(s, **kw):
+            n = kw["messages"][0]["content"].count("] cite") or kw["messages"][0]["content"].count("[cite ")
+            calls.append(n); return FakeResp(n)
+    monkeypatch.setattr(cv, "Groq", FakeClient)
+    class Src:
+        title = "T"; summary = "x"
+    sections = [{"content": " ".join(f"Claim {i} [{i}]." for i in range(1, 21)), "citations": list(range(1, 21))}]
+    out = asyncio.new_event_loop().run_until_complete(cv.verify_citations(sections, [Src()] * 20))
+    assert len(calls) == 3 and len(out) == 20
