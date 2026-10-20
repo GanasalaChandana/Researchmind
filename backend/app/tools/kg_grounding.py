@@ -25,6 +25,14 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
+def _clip(sent: str) -> str:
+    """Shorten at a word boundary, never mid-word."""
+    sent = sent.strip()
+    if len(sent) <= MAX_DESC_CHARS:
+        return sent
+    return sent[:MAX_DESC_CHARS].rsplit(" ", 1)[0].rstrip(",;:-") + "\u2026"
+
+
 def _best_sentence(name_terms: set[str], texts: list[str], name: str = "") -> str:
     best, best_cov = "", 0.0
     # Short names ("MCP", "GPT") have no 4+ letter terms: match the name itself.
@@ -33,12 +41,14 @@ def _best_sentence(name_terms: set[str], texts: list[str], name: str = "") -> st
         for sent in _SENT_SPLIT.split(text):
             if literal is not None:
                 if literal.search(sent):
-                    return sent.strip()[:MAX_DESC_CHARS]
+                    return _clip(sent)
                 continue
             cov = _coverage(name_terms, _terms(sent))
             if cov > best_cov:
                 best, best_cov = sent.strip(), cov
-    return best[:MAX_DESC_CHARS] if best_cov >= NAME_MIN_COVERAGE else ""
+    # Every word of the name must be in the borrowed sentence, or it describes something else.
+    need = 1.0 if len(name_terms) <= 3 else 0.75
+    return _clip(best) if best and best_cov >= need else ""
 
 
 def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:

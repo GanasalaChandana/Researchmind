@@ -45,6 +45,11 @@ def is_promotional(summary: str) -> bool:
     return len(_PROMO.findall(summary or "")) >= 3
 
 
+def _publisher(url: str) -> str:
+    from urllib.parse import urlparse
+    return (urlparse(url or "").netloc or "unknown").lower().removeprefix("www.")
+
+
 def _title_key(title: str) -> str:
     t = re.sub(r"^\s*\[(pdf|html)\]\s*", "", (title or "").lower())
     t = re.split(r"\s[|\u2013\u2014-]\s", t)[0]
@@ -113,7 +118,7 @@ async def synthesize(
     ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\n{s.summary}"
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}\n{s.summary}"
         for i, s in enumerate(ranked_sources)
     )
 
@@ -224,7 +229,7 @@ Grounding rules (important):
 - Keep the source's own status words. If a source calls something "emerging", "proposed", "planned" or "claimed", do not write that it is "standard", "leading", "widely used" or that "most" organizations do it.
 - Any named law, regulation, standard, product, company or date must appear in the source you cite for that sentence. If it does not, leave it out (do not add "such as GDPR" from your own knowledge).
 - Cite a sentence only to the source(s) that state it. Do not add a second source just because it is on the same topic.
-- When a statistic comes from a company's own blog or marketing page, name the publisher ("Atlan's article says ...") instead of attributing it to "sources" in general.
+- When a statistic comes from a company's own blog or marketing page, name the publisher exactly as shown in that source's "Publisher:" line ("the cake.ai article says ...") instead of attributing it to "sources" in general. Never name a company or publisher that is not shown in the sources, and never guess a publisher from memory.
 - Do not put years, date ranges or numbers in section titles unless a source or the topic itself gives them.
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.

@@ -209,3 +209,17 @@ def test_duplicate_papers_are_merged_into_one_source():
     c = Source(title="Totally different article about chunking strategies", url="https://e.com", summary="Other.", quality_score=0.5)
     out = merge_duplicate_sources([b, a, c])
     assert len(out) == 2 and "Finding B" in out[0].summary and out[0].url == "https://arxiv.org/x"
+
+
+def test_kg_fallback_needs_every_name_word_and_never_cuts_mid_word():
+    from app.tools.kg_grounding import _best_sentence, _clip, _terms
+    texts = ["Enterprise RAG is the standard architecture for grounding LLM responses with an offline ingestion pipeline (chunking, embedding, vector-DB indexing)."]
+    assert _best_sentence(_terms("knowledge index"), texts, "knowledge index") == ""
+    long = "word " * 80
+    assert not _clip(long).replace("…", "").endswith("wor")
+    assert _clip(long).endswith("…")
+
+
+def test_publisher_is_taken_from_the_url():
+    from app.agents.synthesizer import _publisher
+    assert _publisher("https://www.cake.ai/blog/x") == "cake.ai"
