@@ -50,6 +50,12 @@ def _publisher(url: str) -> str:
     return (urlparse(url or "").netloc or "unknown").lower().removeprefix("www.")
 
 
+def _url_year(url: str) -> str:
+    """A year in the URL path (/2020/10/...) is often the only publication date we have."""
+    m = re.search(r"/((?:19|20)\d\d)/(?:0?[1-9]|1[0-2])/", url or "")
+    return m.group(1) if m else ""
+
+
 def _title_key(title: str) -> str:
     t = re.sub(r"^\s*\[(pdf|html)\]\s*", "", (title or "").lower())
     t = re.split(r"\s[|\u2013\u2014-]\s", t)[0]
@@ -118,7 +124,7 @@ async def synthesize(
     ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}\n{s.summary}"
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
         for i, s in enumerate(ranked_sources)
     )
 
@@ -230,6 +236,10 @@ Grounding rules (important):
 - Any named law, regulation, standard, product, company or date must appear in the source you cite for that sentence. If it does not, leave it out (do not add "such as GDPR" from your own knowledge).
 - Cite a sentence only to the source(s) that state it. Do not add a second source just because it is on the same topic.
 - When a statistic comes from a company's own blog or marketing page, name the publisher exactly as shown in that source's "Publisher:" line ("the cake.ai article says ...") instead of attributing it to "sources" in general. Never name a company or publisher that is not shown in the sources, and never guess a publisher from memory.
+- If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
+- Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
+- If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").
+- If a section says the sources lack a direct comparison or data point, the executive summary must say so too, and must not describe a trade-off across things the sources never compared.
 - Do not put years, date ranges or numbers in section titles unless a source or the topic itself gives them.
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.

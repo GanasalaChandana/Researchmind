@@ -128,6 +128,16 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
         kept.append(ent)
         kept_ids.add(ent.get("id"))
 
+    # Two entities with the identical description are one fact told twice: keep the first.
+    seen, unique = set(), []
+    for ent in kept:
+        key = _norm(ent.get("description", ""))
+        if key in seen:
+            kept_ids.discard(ent.get("id"))
+            continue
+        seen.add(key)
+        unique.append(ent)
+    kept = unique
     kg_data["entities"] = kept
     kg_data["relationships"] = [
         r for r in kg_data.get("relationships", [])

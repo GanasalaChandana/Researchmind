@@ -231,3 +231,19 @@ def test_measurements_are_not_entities():
         assert is_measurement(bad), bad
     for ok in ("Pinecone", "RAG", "3D printing", "GPT-5"):
         assert not is_measurement(ok), ok
+
+
+def test_url_year_and_duplicate_kg_descriptions():
+    from app.agents.synthesizer import _url_year
+    from app.tools.kg_grounding import ground_knowledge_graph
+    assert _url_year("https://x.org/wp-content/uploads/2020/10/report.pdf") == "2020"
+    assert _url_year("https://x.org/blog/rag-tools") == ""
+    class S:
+        title = "Hybrids"
+        summary = "Hybrids have 15 percent fewer problems than gas cars, while plug-in hybrids have more."
+    d = "Hybrids have 15 percent fewer problems than gas cars."
+    kg = {"entities": [{"id": "1", "name": "Hybrids", "description": d},
+                       {"id": "2", "name": "plug-in hybrids", "description": d}],
+          "relationships": [{"source_id": "1", "target_id": "2", "label": "x", "weight": 0.5}]}
+    out = ground_knowledge_graph(kg, [S()])
+    assert [e["id"] for e in out["entities"]] == ["1"] and out["relationships"] == []
