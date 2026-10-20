@@ -45,9 +45,22 @@ def is_promotional(summary: str) -> bool:
     return len(_PROMO.findall(summary or "")) >= 3
 
 
+_PUBLISHERS = {
+    "pmc.ncbi.nlm.nih.gov": "PubMed Central", "pubmed.ncbi.nlm.nih.gov": "PubMed", "ncbi.nlm.nih.gov": "NCBI",
+    "arxiv.org": "arXiv", "nature.com": "Nature", "mdpi.com": "MDPI", "sciencedirect.com": "ScienceDirect",
+    "cbsnews.com": "CBS News", "nytimes.com": "The New York Times", "bbc.com": "BBC", "bbc.co.uk": "BBC",
+    "reuters.com": "Reuters", "healthline.com": "Healthline", "sciencedaily.com": "ScienceDaily",
+    "who.int": "WHO", "nih.gov": "NIH", "cdc.gov": "CDC", "consumerreports.org": "Consumer Reports",
+}
+
+
 def _publisher(url: str) -> str:
     from urllib.parse import urlparse
-    return (urlparse(url or "").netloc or "unknown").lower().removeprefix("www.")
+    host = (urlparse(url or "").netloc or "unknown").lower().removeprefix("www.")
+    for dom, name in _PUBLISHERS.items():
+        if host == dom or host.endswith("." + dom):
+            return f"{name} ({host})"
+    return host
 
 
 def _url_year(url: str) -> str:
@@ -171,10 +184,24 @@ Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no
         messages=[{"role": "user", "content": kg_prompt}],
     )
 
-    kg_raw = kg_response.choices[0].message.content.strip()
+    kg_raw = (kg_response.choices[0].message.content or "").strip()
     kg_data = parse_llm_json(kg_raw, {"entities": [], "relationships": []})
-    if not isinstance(kg_data, dict):
-        kg_data = {"entities": [], "relationships": []}
+    if not isinstance(kg_data, dict) or not kg_data.get("entities"):
+        # Empty/unparseable (often a reasoning model spending its token budget): try once more, roomier.
+        logger.warning("Knowledge graph came back empty (%d chars); retrying once", len(kg_raw))
+        try:
+            kg_response = await groq_with_retry(
+                client,
+                model=model_id,
+                max_tokens=4000,
+                messages=[{"role": "user", "content": kg_prompt + "\n\nKeep descriptions under 25 words. Output only the JSON object."}],
+            )
+            kg_raw = (kg_response.choices[0].message.content or "").strip()
+            kg_data = parse_llm_json(kg_raw, {"entities": [], "relationships": []})
+        except Exception as exc:
+            logger.warning("Knowledge graph retry failed: %s", exc)
+        if not isinstance(kg_data, dict):
+            kg_data = {"entities": [], "relationships": []}
 
     clean_report_fields({}, kg_data)
     _corpus = " ".join(f"{x.title} {x.summary}" for x in ranked_sources)
@@ -239,6 +266,8 @@ Grounding rules (important):
 - Keep a source's own warnings about its figures ("lower confidence due to a small sample", "estimate", "2019 dollars") next to those figures.
 - For a single study, give its design and size when the source does (e.g. "a 12-week study of 82 adults") and include any "larger studies are needed" or similar limit the source states, in the same sentence as the finding. An executive summary must not present such a finding more strongly than the section does.
 - Refer to a source by its publisher or its study type at first mention ("CLS Health says ...", "a meta-analysis of randomized trials"), not as "the article", "the review" or "the vendor-style article".
+- Do not introduce any named group, condition, product, mechanism or technical term that the sources do not name, in any section including "Analysis:" (for example do not add "athletes" or "autophagy" if no source says so). Analysis may reason about what the sources say; it may not bring in new named things.
+- Never write "both sources" or "all sources" unless you cite and checked each one; say which source says it.
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").

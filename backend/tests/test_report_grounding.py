@@ -257,3 +257,9 @@ def test_kg_fallback_requires_ratio_in_sentence():
     assert got == ""  # no single sentence has both the ratio and the feeding-window words
     got2 = _best_sentence(_terms("16:8 protocol"), texts, "16:8 protocol")
     assert "16:8" in got2 or got2 == ""
+
+
+def test_publisher_friendly_names():
+    from app.agents.synthesizer import _publisher
+    assert _publisher("https://pmc.ncbi.nlm.nih.gov/articles/PMC1") == "PubMed Central (pmc.ncbi.nlm.nih.gov)"
+    assert _publisher("https://www.cake.ai/x") == "cake.ai"
