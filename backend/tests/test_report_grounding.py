@@ -263,3 +263,18 @@ def test_publisher_friendly_names():
     from app.agents.synthesizer import _publisher
     assert _publisher("https://pmc.ncbi.nlm.nih.gov/articles/PMC1") == "PubMed Central (pmc.ncbi.nlm.nih.gov)"
     assert _publisher("https://www.cake.ai/x") == "cake.ai"
+
+
+def test_authority_jargon_is_stripped_and_kg_fallback_rechecked():
+    from app.tools.text_clean import strip_authority_jargon
+    assert strip_authority_jargon("a low-authority vendor page and high-authority sources") == "a vendor page and sources"
+    from app.tools.kg_grounding import ground_knowledge_graph
+    class S:
+        title = "Review"
+        summary = "Intermittent fasting (IF) is presented as a practical alternative to continuous caloric restriction for managing obesity."
+    kg = {"entities": [
+        {"id": "1", "name": "Intermittent fasting", "description": "An eating pattern with fasting periods."},
+        {"id": "2", "name": "Caloric restriction", "description": "Totally unrelated invented text about cars."},
+    ], "relationships": []}
+    out = ground_knowledge_graph(kg, [S()])
+    assert "Caloric restriction" not in [e["name"] for e in out["entities"]]

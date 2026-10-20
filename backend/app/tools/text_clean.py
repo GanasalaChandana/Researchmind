@@ -66,3 +66,11 @@ def fix_number_spacing(text: str, corpus: str) -> str:
         return cand if cand in corpus else m.group(0)
 
     return _SPACED_NUMBER.sub(sub, text)
+
+
+_AUTHORITY = re.compile(r"\b(?:high|low|medium|moderate)[- ]authority\s+", re.IGNORECASE)
+
+
+def strip_authority_jargon(text: str) -> str:
+    """Internal source scores must not show up in the report ("a low-authority vendor page")."""
+    return _AUTHORITY.sub("", text or "")

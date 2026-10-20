@@ -12,7 +12,7 @@ from ..tools.source_scorer import is_social_host
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
-from ..tools.text_clean import clean_report_fields, clean_text, fix_number_spacing
+from ..tools.text_clean import clean_report_fields, clean_text, fix_number_spacing, strip_authority_jargon
 from ..config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -268,6 +268,10 @@ Grounding rules (important):
 - Refer to a source by its publisher or its study type at first mention ("CLS Health says ...", "a meta-analysis of randomized trials"), not as "the article", "the review" or "the vendor-style article".
 - Do not introduce any named group, condition, product, mechanism or technical term that the sources do not name, in any section including "Analysis:" (for example do not add "athletes" or "autophagy" if no source says so). Analysis may reason about what the sources say; it may not bring in new named things.
 - Never write "both sources" or "all sources" unless you cite and checked each one; say which source says it.
+- Never mention "authority", authority scores or "high/low-authority" in the report. Describe a source by what it is (a journal commentary, a pharmacy website, a trial listing, a nonprofit) instead.
+- You only see a short summary of each source. Never say a source "does not provide", "does not mention" or "does not discuss" something as if you had read all of it; say "the summary available here does not mention X" or just leave it out.
+- Never attribute a statement, recommendation or conclusion to a source's authors unless the source text says it. If a sub-question (for example about gender, age or region) is not covered, write that the sources reviewed do not cover it; do not invent what the authors said about it.
+- Describe a trial or study only by what the source says it measures (for example weight maintenance and adherence), not by a goal it does not state (for example "to clarify safety").
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").
@@ -296,8 +300,8 @@ Write 4-5 sections. Return only valid JSON, no markdown fences.{lang_instruction
     sections = report_data.get("sections", [])
     _corpus = " ".join(f"{x.title} {x.summary}" for x in ranked_sources)
     for _sec in sections:
-        _sec["content"] = fix_number_spacing(_sec.get("content") or "", _corpus)
-    report_data["summary"] = fix_number_spacing(report_data.get("summary", ""), _corpus)
+        _sec["content"] = strip_authority_jargon(fix_number_spacing(_sec.get("content") or "", _corpus))
+    report_data["summary"] = strip_authority_jargon(fix_number_spacing(report_data.get("summary", ""), _corpus))
 
     # Step 3: Verify citations
     yield AgentEvent(

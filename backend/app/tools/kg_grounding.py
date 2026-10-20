@@ -127,6 +127,9 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
             desc = _best_sentence(name_terms, summaries, name)
             if not desc:
                 continue
+            lead = _norm(desc)
+            if own and any(n != own and n and lead.startswith(n) and not lead.startswith(own) for n in all_names):
+                continue  # the borrowed sentence is about a different concept
 
         ent["name"], ent["description"] = name, desc
         kept.append(ent)
