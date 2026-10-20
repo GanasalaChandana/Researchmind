@@ -48,6 +48,13 @@ _SOCIAL = {
     "youtube.com", "youtu.be",
 }
 
+# AI-written pages and AI search-result summaries: they repeat other sources and can be wrong.
+_AI_AGGREGATORS = {
+    "ithy.com", "consensus.app", "perplexity.ai", "you.com", "phind.com", "scispace.com",
+    "elicit.com", "elicit.org", "genspark.ai", "felo.ai", "iask.ai", "andisearch.com",
+    "brave.com", "chatgpt.com", "gemini.google.com", "bing.com", "kagi.com",
+}
+
 # Everything else defaults to "low"
 
 # ── Recency patterns ──────────────────────────────────────────────────────────
@@ -63,6 +70,15 @@ def is_social_host(host_or_url: str) -> bool:
         host = urlparse(host).hostname or ""
     host = host.lower().removeprefix("www.")
     return host in _SOCIAL or any(host.endswith("." + h) for h in _SOCIAL)
+
+
+def is_ai_aggregator(host_or_url: str) -> bool:
+    """True for AI-generated summary pages / AI search-result pages (Consensus, Ithy, Perplexity, ...)."""
+    host = host_or_url
+    if "//" in host:
+        host = urlparse(host).hostname or ""
+    host = host.lower().removeprefix("www.")
+    return host in _AI_AGGREGATORS or any(host.endswith("." + h) for h in _AI_AGGREGATORS)
 
 
 def _domain_tier(url: str) -> tuple[str, float]:

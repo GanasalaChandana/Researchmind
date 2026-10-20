@@ -278,3 +278,16 @@ def test_authority_jargon_is_stripped_and_kg_fallback_rechecked():
     ], "relationships": []}
     out = ground_knowledge_graph(kg, [S()])
     assert "Caloric restriction" not in [e["name"] for e in out["entities"]]
+
+
+def test_ai_aggregators_are_dropped_when_enough_real_sources_remain():
+    from app.tools.source_scorer import is_ai_aggregator
+    assert is_ai_aggregator("https://consensus.app/search/x") and is_ai_aggregator("https://www.ithy.com/article/y")
+    assert not is_ai_aggregator("https://pmc.ncbi.nlm.nih.gov/articles/PMC1")
+    from app.agents.synthesizer import rank_usable_sources
+    from app.models.schemas import Source
+    mk = lambda t, u: Source(title=t, url=u, summary=f"{t} summary text about the topic.", quality_score=50)
+    srcs = [mk("A", "https://a.org/1"), mk("B", "https://b.org/2"), mk("C", "https://c.org/3"), mk("D", "https://consensus.app/x")]
+    assert [s.title for s in rank_usable_sources(srcs)] == ["A", "B", "C"] or len(rank_usable_sources(srcs)) == 3
+    few = [mk("A", "https://a.org/1"), mk("D", "https://consensus.app/x")]
+    assert len(rank_usable_sources(few)) == 2  # kept when little else is available

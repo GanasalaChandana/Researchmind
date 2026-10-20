@@ -8,7 +8,7 @@ from ..models.schemas import AgentEvent, Source, ResearchReport, KnowledgeGraph,
 from ..tools.citation_repair import normalize_markers, repair_citations, add_missing_citations, prune_uncited_sources
 from ..tools.kg_grounding import ground_knowledge_graph
 from ..tools.llm_json import parse_llm_json
-from ..tools.source_scorer import is_social_host
+from ..tools.source_scorer import is_social_host, is_ai_aggregator
 from ..tools.citation_verifier import verify_citations
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
@@ -105,7 +105,7 @@ def rank_usable_sources(sources: list[Source]) -> list[Source]:
     if not usable:  # never end up with nothing to cite
         usable = [s for s in sources if s.summary]
     # Social posts and sales pages are not evidence: drop them whenever enough other sources remain.
-    non_social = [s for s in usable if not is_social_host(s.url) and not is_promotional(s.summary)]
+    non_social = [s for s in usable if not is_social_host(s.url) and not is_ai_aggregator(s.url) and not is_promotional(s.summary)]
     if len(non_social) >= 3:
         usable = non_social
     usable = merge_duplicate_sources(usable)
@@ -137,7 +137,7 @@ async def synthesize(
     ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Source type: AI-generated summary page') if is_ai_aggregator(s.url) else ''}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
         for i, s in enumerate(ranked_sources)
     )
 
@@ -174,7 +174,7 @@ Rules (important):
 - Use ONLY names, descriptions, dates and numbers that appear in the sources above. Never add facts, versions, dates or numbers from your own knowledge.
 - Do NOT expand acronyms or add alternative names unless a source does so itself.
 - Each description must restate what a source says about that entity, in one sentence. If the sources say nothing about it, leave the entity out.
-- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics. An entity name must be a thing (a concept, product, organization, technique or person), never a measurement or figure: "528 horsepower" or "38.4% CAGR" is a fact for a description, not an entity.
+- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics. Do not make an entity of a plain outcome measure (for example "body weight" or "blood glucose levels") unless it is a main subject; prefer concepts, interventions, groups, organizations, products and named studies. An entity name must be a thing (a concept, product, organization, technique or person), never a measurement or figure: "528 horsepower" or "38.4% CAGR" is a fact for a description, not an entity.
 Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = await groq_with_retry(
@@ -272,6 +272,7 @@ Grounding rules (important):
 - You only see a short summary of each source. Never say a source "does not provide", "does not mention" or "does not discuss" something as if you had read all of it; say "the summary available here does not mention X" or just leave it out.
 - Never attribute a statement, recommendation or conclusion to a source's authors unless the source text says it. If a sub-question (for example about gender, age or region) is not covered, write that the sources reviewed do not cover it; do not invent what the authors said about it.
 - Describe a trial or study only by what the source says it measures (for example weight maintenance and adherence), not by a goal it does not state (for example "to clarify safety").
+- A source marked "Source type: AI-generated summary page" is not primary evidence. If you use it, say so in the sentence ("an AI-generated summary page says ...") and do not use it as the only support for an important claim.
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").
