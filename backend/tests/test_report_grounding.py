@@ -199,3 +199,13 @@ def test_kg_drops_description_that_is_really_about_another_concept():
     ], "relationships": []}
     out = ground_knowledge_graph(kg, [S()])
     assert [e["name"] for e in out["entities"]] == ["Retrieval-Augmented Generation (RAG)"]
+
+
+def test_duplicate_papers_are_merged_into_one_source():
+    from app.agents.synthesizer import merge_duplicate_sources
+    from app.models.schemas import Source
+    a = Source(title="Keyword search is all you need: Achieving RAG-Level Performance without vector databases", url="https://arxiv.org/x", summary="Finding A about accuracy.", quality_score=0.9)
+    b = Source(title="[PDF] Keyword search is all you need: Achieving RAG-Level Performance ...", url="https://amazon.science/x.pdf", summary="Finding B about latency.", quality_score=0.8)
+    c = Source(title="Totally different article about chunking strategies", url="https://e.com", summary="Other.", quality_score=0.5)
+    out = merge_duplicate_sources([b, a, c])
+    assert len(out) == 2 and "Finding B" in out[0].summary and out[0].url == "https://arxiv.org/x"

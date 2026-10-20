@@ -45,6 +45,28 @@ def is_promotional(summary: str) -> bool:
     return len(_PROMO.findall(summary or "")) >= 3
 
 
+def _title_key(title: str) -> str:
+    t = re.sub(r"^\s*\[(pdf|html)\]\s*", "", (title or "").lower())
+    t = re.split(r"\s[|\u2013\u2014-]\s", t)[0]
+    return re.sub(r"[^a-z0-9]+", " ", t).strip()[:45]
+
+
+def merge_duplicate_sources(sources: list[Source]) -> list[Source]:
+    """The same paper often turns up twice (arXiv + a PDF mirror). Count it once, keep both texts."""
+    by_key: dict[str, Source] = {}
+    out: list[Source] = []
+    for s in sorted(sources, key=lambda x: x.quality_score, reverse=True):
+        key = _title_key(s.title)
+        first = by_key.get(key) if len(key) >= 20 else None
+        if first is None:
+            if len(key) >= 20:
+                by_key[key] = s
+            out.append(s)
+        elif s.summary and s.summary not in first.summary:
+            first.summary = (first.summary + " " + s.summary)[:2500]
+    return out
+
+
 def rank_usable_sources(sources: list[Source]) -> list[Source]:
     """Sources the report may cite, in the exact order they are numbered [1], [2], ...
 
@@ -62,6 +84,7 @@ def rank_usable_sources(sources: list[Source]) -> list[Source]:
     non_social = [s for s in usable if not is_social_host(s.url) and not is_promotional(s.summary)]
     if len(non_social) >= 3:
         usable = non_social
+    usable = merge_duplicate_sources(usable)
     return sorted(usable, key=lambda s: s.quality_score, reverse=True)
 
 

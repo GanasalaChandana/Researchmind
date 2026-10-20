@@ -31,6 +31,7 @@ Topic: {topic}{lang_instruction}
 Rules for the sub-questions:
 - Stay on the topic's exact subject. Keep its key terms in the questions ("AI bots" means bots, not AI in general); do not widen the topic.
 - If the topic contains a vague term, say in research_angle how you interpreted it.
+- Do not invent specific company names, years or figures in sub-questions. Only name a company, product or date if the topic itself does.
 - For topics about news, trends, markets or impact, include one sub-question that looks for contrary or negative evidence (downsides, declines, layoffs, failures, criticism) so the report is not one-sided.
 - Each sub-question must work as a web search on its own, with names, places and years where relevant.
 
