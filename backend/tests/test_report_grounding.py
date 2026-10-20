@@ -223,3 +223,11 @@ def test_kg_fallback_needs_every_name_word_and_never_cuts_mid_word():
 def test_publisher_is_taken_from_the_url():
     from app.agents.synthesizer import _publisher
     assert _publisher("https://www.cake.ai/blog/x") == "cake.ai"
+
+
+def test_measurements_are_not_entities():
+    from app.tools.kg_grounding import is_measurement
+    for bad in ("528 horsepower", "38.4% CAGR", "$9.86 B", "95%", "2026"):
+        assert is_measurement(bad), bad
+    for ok in ("Pinecone", "RAG", "3D printing", "GPT-5"):
+        assert not is_measurement(ok), ok

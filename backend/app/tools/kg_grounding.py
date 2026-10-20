@@ -25,6 +25,14 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
+_MEASUREMENT = re.compile(r"^\W*\d[\d.,]*(\s*%|\s+[a-zA-Z]+|\s*$)|^\W*[$\u20ac\u00a3]\s*\d", re.UNICODE)
+
+
+def is_measurement(name: str) -> bool:
+    """'528 horsepower', '$9.86 B', '38.4% CAGR' are facts, not concepts."""
+    return bool(_MEASUREMENT.match(name or ""))
+
+
 def _clip(sent: str) -> str:
     """Shorten at a word boundary, never mid-word."""
     sent = sent.strip()
@@ -71,7 +79,7 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
     for ent in kg_data.get("entities", []):
         name = str(ent.get("name", "")).strip()
         desc = str(ent.get("description", "")).strip()
-        if not name:
+        if not name or is_measurement(name):
             continue
 
         # An expansion in brackets that no source contains is invented: keep the bare name.

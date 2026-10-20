@@ -155,7 +155,7 @@ Rules (important):
 - Use ONLY names, descriptions, dates and numbers that appear in the sources above. Never add facts, versions, dates or numbers from your own knowledge.
 - Do NOT expand acronyms or add alternative names unless a source does so itself.
 - Each description must restate what a source says about that entity, in one sentence. If the sources say nothing about it, leave the entity out.
-- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics.
+- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics. An entity name must be a thing (a concept, product, organization, technique or person), never a measurement or figure: "528 horsepower" or "38.4% CAGR" is a fact for a description, not an entity.
 Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = await groq_with_retry(
