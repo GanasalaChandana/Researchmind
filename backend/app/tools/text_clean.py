@@ -68,12 +68,46 @@ def fix_number_spacing(text: str, corpus: str) -> str:
     return _SPACED_NUMBER.sub(sub, text)
 
 
+_AUTHORITY_START = re.compile(r"(^|[.!?]\s+)(?:high|low|medium|moderate)[- ]authority\s+(\w)", re.IGNORECASE)
 _AUTHORITY = re.compile(r"\b(?:high|low|medium|moderate)[- ]authority\s+", re.IGNORECASE)
 
 
 def strip_authority_jargon(text: str) -> str:
-    """Internal source scores must not show up in the report ("a low-authority vendor page")."""
-    return _AUTHORITY.sub("", text or "")
+    """Internal source scores must not show up in the report ("a low-authority vendor page").
+
+    Removing the words must not leave a sentence starting in lower case.
+    """
+    text = _AUTHORITY_START.sub(lambda m: m.group(1) + m.group(2).upper(), text or "")
+    return _AUTHORITY.sub("", text)
+
+
+_BOTH = re.compile(r"\b([Bb])oth (?:sources|reviews|studies|articles|papers)(\s+)(\w+)")
+_MARKER = re.compile(r"\[\d+\]")
+_IRREGULAR = {"have": "has", "are": "is", "do": "does", "were": "was"}
+
+
+def _singular_verb(verb: str) -> str:
+    low = verb.lower()
+    if low in _IRREGULAR:
+        return _IRREGULAR[low]
+    if low.endswith(("s", "ed")) or low in {"may", "can", "will", "must", "should", "could", "would", "also", "both", "all"}:
+        return verb
+    if low.endswith(("sh", "ch", "x", "z")):
+        return verb + "es"
+    return verb + "s"
+
+
+def fix_both_sources(text: str) -> str:
+    """'Both sources emphasize ... [1]' names one citation: say 'The cited source emphasizes'."""
+    parts = re.split(r"(?<=[.!?])\s+", text or "")
+    out = []
+    for sent in parts:
+        if _BOTH.search(sent) and len(set(_MARKER.findall(sent))) == 1:
+            sent = _BOTH.sub(
+                lambda m: ("The" if m.group(1) == "B" else "the") + " cited source" + m.group(2) + _singular_verb(m.group(3)),
+                sent, count=1)
+        out.append(sent)
+    return " ".join(out)
 
 
 _CHI = re.compile(r"(?:\u00c7|\u00cf\u2021)\u00b2(?=\s*=)")

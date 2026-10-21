@@ -28,6 +28,10 @@ def _norm(text: str) -> str:
 _MEASUREMENT = re.compile(r"^\W*\d[\d.,]*(\s*%|\s+[a-zA-Z]+|\s*$)|^\W*[$\u20ac\u00a3]\s*\d", re.UNICODE)
 
 
+_TRAILING_CITE = re.compile(r"\s*\((?=[^()]*(?:et al\.|\b(?:19|20)\d\d\b))[^()]*\)\s*\.?\s*$")
+_DOMAIN_NAME = re.compile(r"^[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|ai|co|gov|edu|app|health|info)$", re.IGNORECASE)
+
+
 def is_measurement(name: str) -> bool:
     """'528 horsepower', '$9.86 B', '38.4% CAGR' are facts, not concepts."""
     return bool(_MEASUREMENT.match(name or ""))
@@ -83,7 +87,9 @@ def ground_knowledge_graph(kg_data: dict, sources: list) -> dict:
     for ent in kg_data.get("entities", []):
         name = str(ent.get("name", "")).strip()
         desc = str(ent.get("description", "")).strip()
-        if not name or is_measurement(name):
+        # "(Chari et al., 2026)" / "(Keragon, 2026)" tails are citations, not description.
+        desc = _TRAILING_CITE.sub("", desc).strip()
+        if not name or is_measurement(name) or _DOMAIN_NAME.match(name):
             continue
 
         # An expansion in brackets that no source contains is invented: keep the bare name.

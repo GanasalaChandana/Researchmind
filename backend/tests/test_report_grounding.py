@@ -303,3 +303,24 @@ def test_chi_square_symbol_is_repaired():
     from app.tools.text_clean import clean_text
     assert clean_text("fit indices (Ç² = 68.212, DF = 27)") == "fit indices (χ² = 68.212, DF = 27)"
     assert clean_text("Ç is a letter") == "Ç is a letter"
+
+
+def test_authority_strip_keeps_capital_and_both_sources_fixed():
+    from app.tools.text_clean import strip_authority_jargon, fix_both_sources
+    assert strip_authority_jargon("Vendors claim gains. High-authority reviews show more.") == "Vendors claim gains. Reviews show more."
+    assert strip_authority_jargon("High-authority reviews show more.") == "Reviews show more."
+    assert fix_both_sources("Both sources emphasize more data [1]. Both reviews agree [1][2].") == "The cited source emphasizes more data [1]. Both reviews agree [1][2]."
+
+
+def test_kg_drops_website_entities_and_trailing_citations():
+    from app.tools.kg_grounding import ground_knowledge_graph
+    class S:
+        title = "Chatbots"
+        summary = "Chatbots offer 24/7 assistance and automate appointment scheduling for patients."
+    kg = {"entities": [
+        {"id": "1", "name": "kitrum.com", "description": "A website reporting growth."},
+        {"id": "2", "name": "Chatbots", "description": "Chatbots offer 24/7 assistance and automate appointment scheduling (Keragon, 2026)."},
+    ], "relationships": []}
+    out = ground_knowledge_graph(kg, [S()])
+    assert [e["name"] for e in out["entities"]] == ["Chatbots"]
+    assert "Keragon" not in out["entities"][0]["description"]
