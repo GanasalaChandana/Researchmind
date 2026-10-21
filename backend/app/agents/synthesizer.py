@@ -301,6 +301,7 @@ Grounding rules (important):
 - If a section says the sources lack a direct comparison or data point, the executive summary must say so too, and must not describe a trade-off across things the sources never compared.
 - Do not put years, date ranges or numbers in section titles unless a source or the topic itself gives them.
 - Never describe a trend, gain, improvement or comparison unless a source states it. Reasoning that goes beyond the sources must be labelled "Analysis:".
+- In the executive summary, "peer-reviewed" may describe only findings that the sections cite to a paper itself. A finding the section attributes to a blog, news page or vendor page (even one that cites a study) must be written as "a blog citing a meta-analysis reports ...", never as "peer-reviewed studies show". Market-research press releases are not evidence of effectiveness.
 - The executive summary may only restate claims your sections make, with the same level of certainty. If the sections say the sources lack data on something, the summary must not claim it.
 - Use plain ASCII punctuation: regular spaces and hyphens only.
 
