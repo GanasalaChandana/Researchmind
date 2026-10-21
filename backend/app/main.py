@@ -1501,7 +1501,7 @@ async def chat_with_report(
 ):
     """Stream an LLM answer grounded in the completed research report.
 
-    Uses Groq (Llama 3.3 70B) with the full report as context.
+    Uses Groq (gpt-oss) with the full report as context.
     Persists both the user question and assistant answer to chat_messages.
     Returns an SSE stream of JSON chunks: {"type":"chunk","text":"..."} / {"type":"done"}.
     """

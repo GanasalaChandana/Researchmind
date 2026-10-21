@@ -30,6 +30,7 @@
 | 🔔 Webhooks | Fire events to your endpoint on research completion |
 | 🔐 OAuth | Sign in with Google or GitHub — no password required |
 | ⚡ Redis caching | L1 Redis + L2 Postgres caching; completed sessions served in milliseconds |
+| ✅ Grounded reports | Figures, names and knowledge-graph facts are checked against the source text; vendor pages are labeled as claims; a citation checker flags weak support |
 | 🛡️ Sentry | Error tracking on both frontend and backend |
 
 ---
@@ -82,7 +83,7 @@ User Input
 | Streaming | Server-Sent Events (SSE) proxied through Next.js |
 | Graph viz | react-force-graph-2d (D3 canvas) |
 | Backend | Python FastAPI, asyncio, APScheduler |
-| LLM | Groq API — Llama 3.3 70B |
+| LLM | Groq API — gpt-oss-120b (writing) and gpt-oss-20b (reading) |
 | Search | Tavily Search API |
 | Database | Supabase PostgreSQL (asyncpg) + Alembic migrations |
 | Cache | Upstash Redis (L1) + Postgres (L2) |
