@@ -52,3 +52,14 @@ def ground_summary(summary: str, content: str, fallback: str = "") -> str:
         logger.warning("Summary grounding dropped %d sentence(s) with figures not in the page text", dropped)
     out = " ".join(kept).strip()
     return out if out else (fallback or content[:400].strip())
+
+
+_TYPE_LINE = re.compile(r"\n?\s*TYPE:\s*(vendor|research|news|institution|other)\b[^\n]*\s*$", re.IGNORECASE)
+
+
+def split_type_tag(raw: str) -> tuple[str, str]:
+    """Separate the trailing 'TYPE: vendor' line the summarizer adds from the summary text."""
+    m = _TYPE_LINE.search(raw or "")
+    if not m:
+        return (raw or "").strip(), ""
+    return raw[:m.start()].strip(), m.group(1).lower()

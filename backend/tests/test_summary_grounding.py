@@ -29,3 +29,10 @@ def test_small_whole_numbers_are_not_checked():
 def test_all_sentences_dropped_falls_back_to_snippet():
     out = ground_summary("It improved 99% overall.", "No figures here at all.", fallback="Original snippet.")
     assert out == "Original snippet."
+
+
+def test_type_tag_is_split_off():
+    from app.tools.summary_grounding import split_type_tag
+    assert split_type_tag("A blog about pilots.\nTYPE: vendor") == ("A blog about pilots.", "vendor")
+    assert split_type_tag("A study of 112 papers.\n\nTYPE: Research (peer reviewed)") == ("A study of 112 papers.", "research")
+    assert split_type_tag("No tag here.") == ("No tag here.", "")

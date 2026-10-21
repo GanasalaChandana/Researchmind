@@ -54,6 +54,7 @@ class Source(BaseModel):
     quality_score: float = 0.0      # 0-100 composite score
     domain_authority: str = ""      # "high" | "medium" | "low"
     recency_score: float = 0.0      # 0-1 based on URL/title date signals
+    source_type: str = ""           # "vendor" | "research" | "news" | "institution" | "other" (read from the page)
 
 
 class Entity(BaseModel):

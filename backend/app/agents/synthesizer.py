@@ -150,7 +150,7 @@ async def synthesize(
     ranked_sources = rank_usable_sources(sources)
 
     sources_text = "\n\n".join(
-        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Source type: AI-generated summary page') if is_ai_aggregator(s.url) else ''}{(chr(10) + 'Source type: company marketing page') if is_commercial(s.summary) else ''}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
+        f"[{i+1}] {s.title} [authority:{s.domain_authority}, score:{s.quality_score:.0f}/100]\nURL: {s.url}\nPublisher: {_publisher(s.url)}{(chr(10) + 'Source type: AI-generated summary page') if is_ai_aggregator(s.url) else ''}{(chr(10) + 'Source type: company marketing page') if (is_commercial(s.summary) or s.source_type == 'vendor') else ''}{(chr(10) + 'Year in URL: ' + _url_year(s.url)) if _url_year(s.url) else ''}\n{s.summary}"
         for i, s in enumerate(ranked_sources)
     )
 
@@ -287,6 +287,7 @@ Grounding rules (important):
 - Describe a trial or study only by what the source says it measures (for example weight maintenance and adherence), not by a goal it does not state (for example "to clarify safety").
 - A source marked "Source type: AI-generated summary page" is not primary evidence. If you use it, say so in the sentence ("an AI-generated summary page says ...") and do not use it as the only support for an important claim.
 - A source marked "Source type: company marketing page" sells something. Word its claims as the company's own ("masterofcode.com says ...", "the vendor reports ...") and never state them as established fact or as the only support for an important claim.
+- Only call evidence "peer-reviewed" if the cited source is itself a paper, or says the study was peer-reviewed. A blog or news page that reports a study is a secondary source: write "a blog summarizing a meta-analysis" and do not describe its claims as peer-reviewed evidence.
 - Do not guess reasons, barriers or motives the source does not state, not even to add "though the source does not specify". Just report the figure.
 - When citing a poll or survey, give its date and number of respondents if the source does.
 - If two sources give different figures for the same thing (for example two different market sizes for the same year), say so and name both.

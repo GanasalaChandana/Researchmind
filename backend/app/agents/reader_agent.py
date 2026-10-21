@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source
 from ..tools.url_reader import read_url
 from ..tools.source_scorer import score_source
-from ..tools.summary_grounding import ground_summary
+from ..tools.summary_grounding import ground_summary, split_type_tag
 from ..config import GROQ_API_KEY
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
@@ -42,7 +42,12 @@ Title: {source.title}
 Content:
 {content[:_MAX_ARTICLE_CHARS]}
 
-Return only the summary, no preamble."""
+Return only the summary, no preamble. Then, on a final separate line, classify the page as exactly one of:
+TYPE: vendor (a company selling a product or service, including its blog or whitepaper)
+TYPE: research (a peer-reviewed paper, systematic review or academic study)
+TYPE: news (a news outlet or magazine)
+TYPE: institution (a government agency, university, hospital, nonprofit or professional body)
+TYPE: other"""
 
             try:
                 response = await groq_with_retry(
@@ -52,7 +57,7 @@ Return only the summary, no preamble."""
                     max_tokens=300,
                     temperature=0.0,
                 )
-                raw_summary = response.choices[0].message.content.strip()
+                raw_summary, source.source_type = split_type_tag(response.choices[0].message.content.strip())
                 source.summary = ground_summary(raw_summary, content[:_MAX_ARTICLE_CHARS], fallback=snippet)
             except Exception as exc:
                 logger.warning("Summarization failed for %s: %s", source.url, exc)
