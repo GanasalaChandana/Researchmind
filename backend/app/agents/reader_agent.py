@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from ..models.schemas import AgentEvent, Source
 from ..tools.url_reader import read_url
 from ..tools.source_scorer import score_source
+from ..tools.summary_grounding import ground_summary
 from ..config import GROQ_API_KEY
 from ..tools.groq_retry import groq_with_retry
 from ..tools.groq_models import SMART_MODEL, FAST_MODEL
@@ -25,6 +26,7 @@ async def read_sources(sources: list[Source], language: str = "English") -> Asyn
             message=f"Reading: {source.title or source.url}",
         ), source
 
+        snippet = source.summary or ""  # the search engine's own text, used if every summary sentence is dropped
         content = await read_url(source.url)
         if not content and source.summary and len(source.summary) >= 200:
             # Page couldn't be fetched (bot-blocked, video page...). The search snippet is
@@ -34,7 +36,7 @@ async def read_sources(sources: list[Source], language: str = "English") -> Asyn
         # Always update summary, even if content is empty
         if content:
             lang_instruction = f" Write the summary in {language}." if language != "English" else ""
-            prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points.{lang_instruction}
+            prompt = f"""Summarize the key information from this article in 3-5 sentences. Focus on facts, claims, and data points. Use ONLY numbers that appear in the content below, copied exactly (do not round, convert or recall figures from memory). If the content does not give a number, describe the finding without one.{lang_instruction}
 
 Title: {source.title}
 Content:
@@ -48,9 +50,10 @@ Return only the summary, no preamble."""
                     model=FAST_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300,
-                    temperature=0.2,
+                    temperature=0.0,
                 )
-                source.summary = response.choices[0].message.content.strip()
+                raw_summary = response.choices[0].message.content.strip()
+                source.summary = ground_summary(raw_summary, content[:_MAX_ARTICLE_CHARS], fallback=snippet)
             except Exception as exc:
                 logger.warning("Summarization failed for %s: %s", source.url, exc)
         else:
