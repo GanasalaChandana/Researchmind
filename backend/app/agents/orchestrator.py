@@ -33,6 +33,7 @@ Rules for the sub-questions:
 - If the topic contains a vague term, say in research_angle how you interpreted it.
 - Do not invent specific company names, years or figures in sub-questions. Only name a company, product or date if the topic itself does.
 - For topics about news, trends, markets or impact, include one sub-question that looks for contrary or negative evidence (downsides, declines, layoffs, failures, criticism) so the report is not one-sided.
+- For topics about impact, effects, benefits, risks or effectiveness, include one sub-question worded to find independent evidence ("systematic review", "randomized trial", "national survey", "peer-reviewed study"), not company descriptions.
 - Each sub-question must work as a web search on its own, with names, places and years where relevant.
 
 Return a JSON object with this exact structure:

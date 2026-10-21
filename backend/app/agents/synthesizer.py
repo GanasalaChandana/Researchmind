@@ -187,7 +187,7 @@ Rules (important):
 - Use ONLY names, descriptions, dates and numbers that appear in the sources above. Never add facts, versions, dates or numbers from your own knowledge.
 - Do NOT expand acronyms or add alternative names unless a source does so itself.
 - Each description must restate what a source says about that entity, in one sentence. If the sources say nothing about it, leave the entity out.
-- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics. Do not make an entity of a plain outcome measure (for example "body weight" or "blood glucose levels") unless it is a main subject; prefer concepts, interventions, groups, organizations, products and named studies. An entity name must be a thing (a concept, product, organization, technique or person), never a measurement or figure: "528 horsepower" or "38.4% CAGR" is a fact for a description, not an entity.
+- Prefer the main subjects of the topic (products, organizations, techniques, findings). Skip bare numbers and one-off statistics. Never put a figure from a marketing page into a description without saying whose claim it is ("according to fwdslash.ai"). Do not make an entity of a plain outcome measure (for example "body weight" or "blood glucose levels") unless it is a main subject; prefer concepts, interventions, groups, organizations, products and named studies. An entity name must be a thing (a concept, product, organization, technique or person), never a measurement or figure: "528 horsepower" or "38.4% CAGR" is a fact for a description, not an entity.
 Extract up to 10 entities and up to 15 relationships. Return only valid JSON, no markdown.{lang_instruction}"""
 
     kg_response = await groq_with_retry(
@@ -290,6 +290,9 @@ Grounding rules (important):
 - Do not guess reasons, barriers or motives the source does not state, not even to add "though the source does not specify". Just report the figure.
 - When citing a poll or survey, give its date and number of respondents if the source does.
 - If two sources give different figures for the same thing (for example two different market sizes for the same year), say so and name both.
+- The executive summary must label any figure that comes from a company marketing page as the company's claim ("a vendor blog says ..."). A statistic introduced only by "studies show" with no named study is an unsupported claim: attribute it to the page and do not call it "measured" or "reported effects".
+- A study protocol, trial registry listing or plan describes research that is intended, not results and not what has been deployed. Do not use one as evidence that something is happening or works.
+- Do not list statistical fit indices, p-values or construct codes (for example "GFI = 0.953", "PS1-PS5") unless the topic is statistics. Say in plain words what was found. Do not write "statistically" unless the source reports a significance test for that exact claim.
 - If two sources disagree (different numbers, or opposite statements, about the same thing), say so explicitly and name both, instead of presenting one as settled. Do not call two articles "the same data" or "the same survey" unless a source says so.
 - Keep every qualifier a source attaches to a figure: "used" vs new, a region, a time period, "for a 30-mpg car". Never widen a figure to a broader group than the source covers.
 - If a source shows "Year in URL" three or more years before today, say its age in the sentence ("a 2020 report").

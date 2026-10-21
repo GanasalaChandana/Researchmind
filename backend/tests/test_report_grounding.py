@@ -297,3 +297,9 @@ def test_commercial_pages_are_detected():
     from app.agents.synthesizer import is_commercial
     assert is_commercial("A pilot program delivers a proof-of-value solution in 30 days, with no hidden costs.")
     assert not is_commercial("The meta-analysis examined 27 randomized controlled trials.")
+
+
+def test_chi_square_symbol_is_repaired():
+    from app.tools.text_clean import clean_text
+    assert clean_text("fit indices (Ç² = 68.212, DF = 27)") == "fit indices (χ² = 68.212, DF = 27)"
+    assert clean_text("Ç is a letter") == "Ç is a letter"

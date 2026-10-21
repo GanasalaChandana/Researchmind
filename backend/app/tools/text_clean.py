@@ -29,7 +29,7 @@ def clean_text(text):
     text = _HYPHENS.sub("-", text)
     for src, dst in _REPLACEMENTS.items():
         text = text.replace(src, dst)
-    return text
+    return fix_chi_square(text)
 
 
 def clean_report_fields(report_data: dict, kg_data: dict) -> None:
@@ -74,3 +74,11 @@ _AUTHORITY = re.compile(r"\b(?:high|low|medium|moderate)[- ]authority\s+", re.IG
 def strip_authority_jargon(text: str) -> str:
     """Internal source scores must not show up in the report ("a low-authority vendor page")."""
     return _AUTHORITY.sub("", text or "")
+
+
+_CHI = re.compile(r"(?:\u00c7|\u00cf\u2021)\u00b2(?=\s*=)")
+
+
+def fix_chi_square(text: str) -> str:
+    """Mis-decoded 'chi-squared' ("\u00c7\u00b2 = 68.2") back to the real symbol."""
+    return _CHI.sub("\u03c7\u00b2", text or "")
